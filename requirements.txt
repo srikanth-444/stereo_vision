@@ -1,0 +1,4 @@
+numpy==1.26.0
+opencv-python==4.8.0
+open3d==0.17.1
+matplotlib==3.8.0

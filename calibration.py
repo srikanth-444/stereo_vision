@@ -12,9 +12,9 @@ class Calibration():
         self.w=0
      
     def capturing_images(self,num):
-        camera=cv.VideoCapture(0)
-        camera.set(cv.CAP_PROP_FRAME_WIDTH,1600)
-        camera.set(cv.CAP_PROP_FRAME_HEIGHT,600)
+        camera=cv.VideoCapture(2)
+        camera.set(cv.CAP_PROP_FRAME_WIDTH,1280)
+        camera.set(cv.CAP_PROP_FRAME_HEIGHT,480)
         if not camera.isOpened():
             print("Cannot open camera")
             exit()
@@ -23,8 +23,8 @@ class Calibration():
             ret,frame=camera.read()
             cv.imshow("window",frame)
             if cv.waitKey(1)==ord('c'):
-                cv.imwrite('right/image'+str(counter)+'.png',cv.rotate(frame[:,:800,:],cv.ROTATE_180))
-                cv.imwrite('left/image'+str(counter)+'.png',cv.rotate(frame[:,800:,:],cv.ROTATE_180))
+                cv.imwrite('right/image'+str(counter)+'.png',cv.rotate(frame[:,:640,:],cv.ROTATE_180))
+                cv.imwrite('left/image'+str(counter)+'.png',cv.rotate(frame[:,640:,:],cv.ROTATE_180))
                 counter=counter+1
                 if counter==num:
                     break
@@ -33,9 +33,9 @@ class Calibration():
         criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
  
         # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
-        objp = np.zeros((5*3,3), np.float32)
-        objp[:,:2] = np.mgrid[0:5,0:3].T.reshape(-1,2)
-        
+        objp = np.zeros((9*5,3), np.float32)
+        objp[:,:2] = np.mgrid[0:9,0:5].T.reshape(-1,2)
+        objp = objp*24  # Assuming square size of 25mm
         # Arrays to store object points and image points from all the images.
         objpoints = [] # 3d point in real world space
         imgpoints = [] # 2d points in image plane.
@@ -47,9 +47,9 @@ class Calibration():
             gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
             
             # Find the chess board corners
-            ret, corners = cv.findChessboardCorners(gray, (5,3), None)
-            
-            
+            ret, corners = cv.findChessboardCorners(gray, (9,5), None)
+
+
             # If found, add object points, image points (after refining them)
             if ret == True:
                 objpoints.append(objp)
@@ -58,7 +58,7 @@ class Calibration():
                 imgpoints.append(corners)
             
             # Draw and display the corners
-                cv.drawChessboardCorners(img, (5,3), corners2, ret)
+                cv.drawChessboardCorners(img, (9,5), corners2, ret)
                 cv.imshow('img', img)
                 cv.waitKey(500)
         ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
@@ -88,9 +88,10 @@ class Calibration():
 
         criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
         criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100, 0.0001)
-       
-        objp = np.zeros((5*3,3), np.float32)
-        objp[:,:2] = np.mgrid[0:5,0:3].T.reshape(-1,2)
+
+        objp = np.zeros((9*5,3), np.float32)
+        objp[:,:2] = np.mgrid[0:9,0:5].T.reshape(-1,2)
+        objp = objp*24.0  # Assuming square size of 30mm
 
         objpoints = []
         left_imgpoints = []
@@ -104,7 +105,7 @@ class Calibration():
             gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
             
 
-            ret, corners = cv.findChessboardCorners(gray, (5,3), None)
+            ret, corners = cv.findChessboardCorners(gray, (9,5), None)
             
      
             if ret == True:
@@ -114,7 +115,7 @@ class Calibration():
                 left_imgpoints.append(corners)
             
   
-                cv.drawChessboardCorners(img, (5,3), corners2, ret)
+                cv.drawChessboardCorners(img, (9,5), corners2, ret)
                 cv.imshow('img', img)
                 cv.waitKey(500)
 
@@ -124,7 +125,7 @@ class Calibration():
                 gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
             
 
-                ret, corners = cv.findChessboardCorners(gray, (5,3), None)
+                ret, corners = cv.findChessboardCorners(gray, (9,5), None)
             
      
                 if ret == True:
@@ -132,9 +133,9 @@ class Calibration():
                 
                     corners2 = cv.cornerSubPix(gray,corners, (11,11), (-1,-1), criteria)
                     right_imgpoints.append(corners)
-            
-    
-                    cv.drawChessboardCorners(img, (5,3), corners2, ret)
+
+
+                    cv.drawChessboardCorners(img, (9,5), corners2, ret)
                     cv.imshow('img', img)
                     cv.waitKey(500)
 
@@ -196,7 +197,7 @@ class Calibration():
         return img
 if __name__=="__main__":
     calibration=Calibration()
-    calibration.capturing_images(20)
+    # calibration.capturing_images(10)
     calibration.single_camera_calibration('left')
     calibration.single_camera_calibration("right")
     calibration.stereo_camera_calibration()

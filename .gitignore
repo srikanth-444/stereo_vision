@@ -1,0 +1,19 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# Videos, large outputs
+*.mp4
+*.png
+*.npy
+*.ply
+
+# VSCode settings
+.vscode/
+
+# Other large folders
+camera_mat/
+images/
