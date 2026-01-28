@@ -7,9 +7,6 @@ venv/
 
 # Videos, large outputs
 *.mp4
-*.png
-*.npy
-*.ply
 
 # VSCode settings
 .vscode/
