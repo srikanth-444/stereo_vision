@@ -1,31 +1,32 @@
 import numpy as np
 
-class landmarks:
+class Landmark:
     def __init__(self):
         self.position=None
-        self.r_image_points=None
         self.image_points=None
         self.descriptor=None
         self.observations=[]
         self.active=True
         self.id=None
+        self.confidence=None
+        self.frame_id=None
+        self.all_descriptors=[]
+        
 
-    def update(self,position,r_image_points,image_points):
+    def update(self,position,image_points,frame_id):
         assert len(position)==3, "Position must be a 3D point."
-        assert len(r_image_points)>0, "Descriptor cannot be empty."
 
         position = np.array(position)
-        r_image_points = np.array(r_image_points)
         image_points = np.array(image_points)
 
         self.position=position
-        self.r_image_points=r_image_points
         self.image_points=image_points
+        self.frame_id=frame_id
         
         
     
-    def add_observation(self,id, image_point, r_image_point):
-        
-        observation={'frame_id':id, 'image_point':image_point, 'r_image_point': r_image_point }
+    def add_observation(self,id, image_point,descriptor):  
+        observation={'frame_id':id, 'image_point':image_point}
         self.observations.append(observation)
+        self.all_descriptors.append(descriptor)
 

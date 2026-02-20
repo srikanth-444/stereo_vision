@@ -1,14 +1,15 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from camera.camera import stereo_camera
-from camera.camera import anms
-from slam.landmarks import landmarks, bundel_adjustment
+from sensors.camera import stereo_camera
+from sensors.camera import anms
+from src.algorithms.Landmark.landmarks import landmarks
+from algorithms import bundle_adjustment
 from time import time
 from scipy.optimize import least_squares
 from scipy.sparse import lil_matrix
 from scipy.spatial.transform import Rotation 
-from slam.loopclosure import Loop_closure
+from algorithms.loopclosure import Loop_closure
 from mpl_toolkits.mplot3d import Axes3D
 
 
@@ -392,15 +393,10 @@ if __name__ == "__main__":
                 slam.create_new_landmarks(gray_left, gray_right,nonlinear_triangulation=False)
             slam.prev_gray_left = gray_left.copy()
             slam.prev_gray_right = gray_right.copy()
-        # if slam.count_frame>14:
-        #     break
+
         slam.count_frame += 1
 
     np.save('camera_poses.npy', slam.camera_poses)
-    
-    # bundel_adjustment( slam.land_marks, slam.camera_poses, slam.cam)
-    
-
     
     lx= [lm.position[0] for lm in slam.land_marks]
     lz = [lm.position[2] for lm in slam.land_marks]

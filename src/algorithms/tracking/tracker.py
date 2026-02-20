@@ -1,0 +1,29 @@
+from abc import ABC, abstractmethod
+
+class Tracker(ABC):
+
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def track_landmarks(self, previous_frame, current_frame, landmarks):
+        pass
+
+def tracker_factory(config_load,feature_extractor,camera):
+    reprojection_error=config_load.get('reprojection_error',{})
+    confidence =config_load.get('confidence',{})
+    iterationsCount=config_load.get('iterationsCount',{})
+    feature_extractor=feature_extractor
+    camera=camera
+    if config_load.get('type',{})=='descriptor':
+        from .descriptors import DescriptorTracker
+        return DescriptorTracker(reprojection_error,confidence,iterationsCount,feature_extractor,camera)
+    if config_load.get('type',{})=='optical':
+        from .optical import OpticalTracker
+        FB_MAX_DIST=config_load.get('FB_MAX_DIST')
+        win_size=config_load.get('win_size')
+        max_level=config_load.get('max_level')
+        return OpticalTracker(reprojection_error,confidence,iterationsCount,camera,FB_MAX_DIST,winSize=(win_size,win_size),maxLevel=max_level)
+    raise ValueError(f"Unknown tracker type: {config_load.get('type',{})}")
+
+    
