@@ -9,15 +9,15 @@ class Tracker(ABC):
     def track_landmarks(self, previous_frame, current_frame, landmarks):
         pass
 
-def tracker_factory(config_load,feature_extractor,camera):
+def tracker_factory(config_load,landmark_manager,camera):
     reprojection_error=config_load.get('reprojection_error',{})
     confidence =config_load.get('confidence',{})
     iterationsCount=config_load.get('iterationsCount',{})
-    feature_extractor=feature_extractor
+    landmark_manager=landmark_manager
     camera=camera
     if config_load.get('type',{})=='descriptor':
         from .descriptors import DescriptorTracker
-        return DescriptorTracker(reprojection_error,confidence,iterationsCount,feature_extractor,camera)
+        return DescriptorTracker(reprojection_error,confidence,iterationsCount,landmark_manager,camera)
     if config_load.get('type',{})=='optical':
         from .optical import OpticalTracker
         FB_MAX_DIST=config_load.get('FB_MAX_DIST')

@@ -4,7 +4,7 @@ from scipy.optimize import least_squares
 # import matplotlib.pyplot as plt
 
 class Camera:
-    def __init__(self, intrinsic, distortion, extrinsic, interface):
+    def __init__(self, intrinsic, distortion, extrinsic, interface,w,h):
         fx= intrinsic.get('fx')
         fy= intrinsic.get('fy')
         cx= intrinsic.get('cx')
@@ -17,6 +17,7 @@ class Camera:
         self.distortion=distortion
         self.extrinsic=T
         self.interface=interface
+        self.new_intrinsic, _ = cv2.getOptimalNewCameraMatrix(self.intrinsic, self.distortion, (w,h), 1)
         
 
     def get_intrinsic(self,):
@@ -103,9 +104,7 @@ class Camera:
     def undistortframe(self, frame):
         if self.distortion is None or len(self.distortion) == 0:
             return frame
-        h, w = frame.shape[:2]
-        new_intrinsic, _ = cv2.getOptimalNewCameraMatrix(self.intrinsic, self.distortion, (w,h), 1)
-        undistorted_frame = cv2.undistort(frame, self.intrinsic, self.distortion, None, new_intrinsic)
+        undistorted_frame = cv2.undistort(frame, self.intrinsic, self.distortion, None, self.new_intrinsic)
         return undistorted_frame
 
         

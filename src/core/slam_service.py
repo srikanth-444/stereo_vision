@@ -27,7 +27,8 @@ def start_service():
         distortion= camera_config.get('distortion',{})
         interface_config= camera_config.get('interface',{})
         interface=interface_factory(interface_config)
-        camera=Camera(intrinsic=intrinsic, extrinsic=extrinsic,distortion=distortion, interface=interface)
+        [w,h]=camera_config.get('resolution',[0,0])
+        camera=Camera(intrinsic=intrinsic, extrinsic=extrinsic,distortion=distortion, interface=interface,w=w,h=h)
         camera_map[camera_config.get('ID',{})]=camera
         print(f"Initialized camera with ID {camera_config.get('ID',{})}")    
 
@@ -43,14 +44,14 @@ def start_service():
     min_num_landmarks=visual_odometry_config.get('min_num_landmarks',100)
 
     feature_extractor=feature_extractor_factory(feature_extractor_config)
-    tracker=tracker_factory(tracker_config,feature_extractor,camera_map[tracker_config.get('camera_id',0)])
+    tracker=tracker_factory(tracker_config,landmark_manager,camera_map[tracker_config.get('camera_id',0)])
     
     if depth_estimator_config.get('type')=='stereo':
         left_camera=camera_map[depth_estimator_config.get('left_camera_id',{})]
         right_camera=camera_map[depth_estimator_config.get('right_camera_id',{})]
         depth_estimator=Stereo(left_camera,right_camera)
     visualize=Visualize(frame_manager, landmark_manager)
-    pipeline=pipeline_factory(landmark_manager, tracker, feature_extractor,frame_manager,depth_estimator,min_num_landmarks,visualize)
+    pipeline=pipeline_factory(landmark_manager, tracker, feature_extractor,frame_manager,depth_estimator,min_num_landmarks,visualize,camera_map)
     
     print("Starting SLAM pipeline...")
     pipeline.run()

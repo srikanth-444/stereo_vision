@@ -1,32 +1,26 @@
 import numpy as np
 from .landmarks import Landmark
+import cv2
 
 
 class LandmarkManager:
     def __init__(self):
-        self.landmarks=[]
         self.id_counter=0
         self.landmark_map = {}
         self.active_ids = set()
         self.poistion_3d={}
+        
+        
        
 
     def add_landmark(self,position,image_points,descriptor,frame_id):
-        landmark=Landmark()
-        landmark.update(position,image_points,frame_id)
-        position=np.floor(position/0.01).astype(int)
+        landmark=Landmark(self.id_counter, position, image_points,descriptor,frame_id)
+        position=np.floor(position/0.1).astype(int)
         self.poistion_3d[position[0],position[1],position[2]]=landmark
-        landmark.descriptor=descriptor
-        landmark.id=self.id_counter
         self.landmark_map[landmark.id] = landmark
         self.active_ids.add(landmark.id)
         self.id_counter+=1
-        self.landmarks.append(landmark)
-
-    def update_landmark_position(self,id,position):
-        landmark=self.get_landmark_by_id(id)
-        if landmark:
-            landmark.position=position
+        return landmark
 
     def get_active_landmarks(self):
         return [self.landmark_map[id] for id in self.active_ids] 
@@ -43,10 +37,8 @@ class LandmarkManager:
             return self.landmark_map[id]
         return None
 
-    def num_landmarks(self):
-        return len(self.landmarks)
     
-    def check_closest_point(self,point,threshold=0.1):
+    def check_closest_point(self,id,image_point,des,point,threshold=0.1):
         if len(self.poistion_3d) == 0:
             return False
         point =np.floor(point/threshold).astype(int)
@@ -55,6 +47,7 @@ class LandmarkManager:
             landmark=self.poistion_3d[point[0],point[1],point[2]]
             if landmark is not None:
                 landmark.active=True
+                landmark.add_observation(id, image_point,des)
                 return True
             else:
                 return False
@@ -64,9 +57,32 @@ class LandmarkManager:
     def num_of_active_landmarks(self):
         return len(self.get_active_landmarks())
     
-    def update_active_landmark(self,):
+    def update_active_landmark(self,landmarks):
         self.active_ids = {
-        id for id in self.active_ids
-        if self.get_landmark_by_id(id).active
+        landmark.id for landmark in landmarks
+        if landmark.active
     }
+    
+    def remove_bad_landmarks(self,ids):
+        for id in ids:
+            if id not in self.landmark_map:
+                continue
+            landmark=self.get_landmark_by_id(id)
+            landmark.active=False
+            if landmark.get_found_ratio()<0.25 or landmark.tracked<=2:
+                del(self.landmark_map[id])
+        
+
+    def merge_landamrks(self, ids):
+        if len(ids) < 2:
+            return
+        ids = list(ids)
+        survivor_id = min(ids)
+        survivor = self.get_landmark_by_id(survivor_id)
+        for id in ids:
+            if id != survivor_id:
+                landmark=self.get_landmark_by_id(id)
+                survivor.add_observation(landmark.frame_id, landmark.image_points,landmark.descriptor)
+                self.landmark_map[id]=survivor
+
     

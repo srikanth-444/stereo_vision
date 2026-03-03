@@ -16,7 +16,7 @@ sensors:
         k3: 0.0
       interface:
         type: "csv_reader"
-        path: "D:/Users/popur/Downloads/machine_hall/machine_hall/MH_01_easy/MH_01_easy/mav0/cam1/data.csv"  # Path to the CSV file containing camera data
+        path: "/home/srikanth/machine_hall/machine_hall/MH_01_easy/MH_01_easy/mav0/cam1/data.csv"  # Path to the CSV file containing camera data
       rate_hz: 20
       resolution: [752, 480]
       camera_model: pinhole
@@ -32,7 +32,7 @@ sensors:
       distortion_coefficients: [-0.28340811, 0.07395907, 0.00019359, 1.76187114e-05]
       interface:
         type: "csv_reader"
-        path: "D:/Users/popur/Downloads/machine_hall/machine_hall/MH_01_easy/MH_01_easy/mav0/cam0/data.csv"  # Path to the CSV file containing camera data  
+        path: "/home/srikanth/machine_hall/machine_hall/MH_01_easy/MH_01_easy/mav0/cam0/data.csv"  # Path to the CSV file containing camera data  
       rate_hz: 20
       resolution: [752, 480]
       camera_model: pinhole
@@ -51,13 +51,13 @@ pipe_line:
     
     feature_extractor:
       type: "ORB"
-      n_features: 2000
+      nfeatures: 1200
       scale_factor: 1.2
       n_levels: 8
       edgeThreshold: 31
       firstLevel: 0
       patchSize: 31
-      fastThreshold: 20
+      fastThreshold: 19
       WTA_K: 2
 
     depth_estimator:
@@ -74,4 +74,4 @@ pipe_line:
       win_size: 31
       max_level: 8
       camera_id: 0
-    min_num_landmarks: 100
+    min_num_landmarks: 20

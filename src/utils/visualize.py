@@ -27,8 +27,10 @@ class Visualize:
         self.vis.poll_events()
         self.vis.update_renderer()
         self.i=0
+        render_option = self.vis.get_render_option()
+        render_option.point_size = 2.0
     
-    def visualize_pipeline(self,)->None:
+    def visualize_pipeline(self, frame)->None:
 
             # --- FPS computation ---
         now = time.perf_counter()
@@ -38,16 +40,16 @@ class Visualize:
         if dt > 0:
             inst_fps = 1.0 / dt
             self.fps = (1 - self.fps_alpha) * self.fps + self.fps_alpha * inst_fps
-        frame=self.frame_manager.get_current_frame_of_camera(0)
-        landmarks=self.landmark_manager.get_active_landmarks()
 
         if len(frame.frame.shape) == 2:
             display_img = cv2.cvtColor(frame.frame, cv2.COLOR_GRAY2BGR)
         else:
             display_img = frame.frame.copy() # Keep original if already color
-        for landmark in landmarks:
-            x=int(landmark.image_points[0])
-            y=int(landmark.image_points[1])
+        image_points=frame.get_tracked_points()
+
+        for pt in image_points:
+            x=int(pt[0])
+            y=int(pt[1])
             cv2.circle(display_img, (x,y), 2, (0,255,0), -1)
             # --- Draw FPS ---
         cv2.putText(
@@ -64,18 +66,31 @@ class Visualize:
         cv2.waitKey(1)
 
     def visualize_as_point_cloud(self,T=None):
+        
+        self.landmark_points = []
+        colors = []
 
-        self.landmark_points.extend([lm.position for lm in self.landmark_manager.landmarks[self.i:]])
-        np_points=np.array(self.landmark_points)
+        for lm in self.landmark_manager.landmark_map.values():
+            self.landmark_points.append(lm.position)
+
+            if lm.active:
+                colors.append([1, 0, 0])  #
+            else:
+                colors.append([0, 0, 0])  # ⚫ Black
+
+        np_points = np.array(self.landmark_points)
+        np_points = (np.array([[0,1,0],[1,0,0],[0,0,-1]])@np_points.T).T
+        np_colors = np.array(colors)
+
         self.pcd_landmarks.points = o3d.utility.Vector3dVector(np_points)
-        self.pcd_landmarks.colors = o3d.utility.Vector3dVector(
-            np.tile([0, 1, 0], (len(np_points), 1))
-        )
+        self.pcd_landmarks.colors = o3d.utility.Vector3dVector(np_colors)
+    
 
         self.vis.update_geometry(self.pcd_landmarks)
 
         if T is not None:
             pose = T[:3, 3]
+            pose = (np.array([[0,1,0],[1,0,0],[0,0,-1]])@pose.T).T
             self.traj_points.append(pose)
 
             if len(self.traj_points) > 1:
@@ -88,7 +103,7 @@ class Visualize:
             )
             self.traj_line_set.lines = o3d.utility.Vector2iVector(self.traj_lines)
             self.traj_line_set.colors = o3d.utility.Vector3dVector(
-                [[1, 0, 0] for _ in self.traj_lines]
+                [[0, 0, 1] for _ in self.traj_lines]
             )
 
             self.vis.update_geometry(self.traj_line_set)
@@ -96,7 +111,7 @@ class Visualize:
         if self.first_view:
                 self.vis.reset_view_point(True)
                 self.first_view = False
-        self.i=len(self.landmark_manager.landmarks)-1
+        # self.i=len(self.landmark_manager.landmarks)-1
         self.vis.poll_events()
         self.vis.update_renderer()
         # self.follow_camera(T)
@@ -117,3 +132,5 @@ class Visualize:
         view_ctl.set_front(-forward)           # Direction the camera is facing
         view_ctl.set_up(up)                    # Keep the 'sky' up
         view_ctl.set_zoom(0.05)
+
+    
