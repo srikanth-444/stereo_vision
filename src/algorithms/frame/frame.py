@@ -11,6 +11,7 @@ class Frame():
         self.keyframe=keyframe
         self.intrinsic=intrinsic
         self.extrinsic=extrinsic
+
         self.camera_center=None
         self.keypoint_landmarks_association={}
         self.all_descriptors=[]
@@ -105,28 +106,29 @@ class Frame():
         land_ids=[lm.id for lm in landmarks]
         projected_points =self.project_landmarks(object_points,T)
         final_matches=[]
-        for lm_idx, proj_pt in enumerate(projected_points):
-            # depth_bin=proj_pt[2]
-            # proj_pt=proj_pt[:2]
-            if proj_pt[0] < 0 or proj_pt[1] < 0 or proj_pt[0]>self.width or proj_pt[1]>self.height:
-                continue
-            candidate_indices = self.tree.query_ball_point(proj_pt, r=10)
-            if len(candidate_indices) == 0:
-                continue
-           
-            candidate_desc = self.all_descriptors[candidate_indices]
-            matches = self.bf.knnMatch(landmark_desc[lm_idx].reshape(1, -1),candidate_desc,k=2)
-            if len(matches) == 0 or len(matches[0]) < 2:
-                continue
-            m, n = matches[0]
-            # print(f"matches ratio {m.distance/n.distance} m.distance{m.distance}")
+        matches = self.bf.knnMatch(landmark_desc, self.all_descriptors, k=2)
+        for i, m_list in enumerate(matches):
+            if len(m_list) < 2: continue
+            m, n = m_list[0], m_list[1]
+
+            # 3. Ratio & Distance Thresholds
             if m.distance < 0.9 * n.distance and m.distance < 40:
-                m.trainIdx=candidate_indices[m.trainIdx]
-                m.queryIdx=lm_idx
-                final_matches.append(m)
-                self.keypoint_landmarks_association[m.trainIdx]=land_ids[m.queryIdx] 
-        if len(final_matches)<20:
-            final_matches=self.global_matches(landmark_desc,land_ids)
+                
+                # 4. THE GEOMETRIC MASK (Replaces the KD-Tree)
+                # Check if the matched keypoint is actually near where we projected it
+                matched_kp_pt = self.image_points[m.trainIdx]
+                proj_pt = projected_points[i]
+                
+                # L2 distance check: sqrt((x1-x2)^2 + (y1-y2)^2) < 10
+                # Faster version: squared distance < 100
+                dist_sq = np.sum((matched_kp_pt - proj_pt)**2)
+                
+                if dist_sq < 100: # 10 pixel radius
+                    m.queryIdx = i # landmark index
+                    final_matches.append(m)
+                    self.keypoint_landmarks_association[m.trainIdx] = land_ids[i] 
+        # if len(final_matches)<20:
+        # final_matches=self.global_matches(landmark_desc,land_ids)
         matched_objects=np.array([object_points[m.queryIdx] for m in final_matches])
         matched_images=np.array([self.image_points[m.trainIdx] for m in final_matches])
         matched_indices = {m.trainIdx for m in final_matches}  # indices of matched keypoints
@@ -134,15 +136,15 @@ class Frame():
         matched_des =[self.all_descriptors[m.trainIdx] for m in final_matches]
         
 
-        self.plot_points(projected_points,(0,0,255))
-        self.plot_points(self.image_points,(255,0,0))
-        for m in final_matches:
-            pt1 = tuple(projected_points[m.queryIdx][:2].astype(int))
-            pt2 = tuple(self.image_points[m.trainIdx].astype(int))
-            cv2.line(self.debug_img, pt1, pt2, (0, 255, 0), 1)
+        # self.plot_points(projected_points,(0,0,255))
+        # self.plot_points(self.image_points,(255,0,0))
+        # for m in final_matches:
+        #     pt1 = tuple(projected_points[m.queryIdx][:2].astype(int))
+        #     pt2 = tuple(self.image_points[m.trainIdx].astype(int))
+        #     cv2.line(self.debug_img, pt1, pt2, (0, 255, 0), 1)
        
-        cv2.imshow("Projection Debug", self.debug_img)
-        cv2.waitKey(1)  # <-- Blocking! Waits until any key is pressed
+        # cv2.imshow("Projection Debug", self.debug_img)
+        # cv2.waitKey(1)  # <-- Blocking! Waits until any key is pressed
         return matched_objects, matched_images, matched_des
     
     def plot_points(self,points,color):

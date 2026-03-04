@@ -9,16 +9,21 @@ from ..sensors import Camera
 from ..interfaces import interface_factory
 from .. utils.visualize import Visualize
 from ..algorithms.frame import FrameManager
-
+import logging
 from multiprocessing import Process, Manager
 
 def start_service():
-    print("SLAM service started")
-    print("Loading configuration...")
+    logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s.%(msecs)03d | %(name)s | %(levelname)-8s | %(message)s',
+    datefmt='%H:%M:%S'
+)
+    logging.info("SLAM service started")
+    logging.info("Loading configuration...")
     config=load_config('config.yaml')
 
     sensor_config=config.get('sensors',{})
-    print("Identifying sensors...")
+    logging.info("Identifying sensors...")
     cameras_config=sensor_config.get('cameras',{})
     camera_map={}
     for camera_config in cameras_config:
@@ -30,10 +35,10 @@ def start_service():
         [w,h]=camera_config.get('resolution',[0,0])
         camera=Camera(intrinsic=intrinsic, extrinsic=extrinsic,distortion=distortion, interface=interface,w=w,h=h)
         camera_map[camera_config.get('ID',{})]=camera
-        print(f"Initialized camera with ID {camera_config.get('ID',{})}")    
+        logging.info(f"Initialized camera with ID {camera_config.get('ID',{})}")    
 
     pipeline_config=config.get('pipe_line',{})
-    print("Initializing pipeline...")
+    logging.info("Initializing pipeline...")
 
     landmark_manager=LandmarkManager()
     frame_manager=FrameManager(camera_map=camera_map)
@@ -53,7 +58,7 @@ def start_service():
     visualize=Visualize(frame_manager, landmark_manager)
     pipeline=pipeline_factory(landmark_manager, tracker, feature_extractor,frame_manager,depth_estimator,min_num_landmarks,visualize,camera_map)
     
-    print("Starting SLAM pipeline...")
+    logging.info("Starting SLAM pipeline...")
     pipeline.run()
     visualize.run()
 

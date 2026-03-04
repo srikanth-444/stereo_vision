@@ -27,6 +27,7 @@ class Visualize:
         self.vis.poll_events()
         self.vis.update_renderer()
         self.i=0
+        self.R_transform = np.array([[0,1,0,0],[1,0,0,0],[0,0,-1,0],[0,0,0,1]])
         render_option = self.vis.get_render_option()
         render_option.point_size = 2.0
     
@@ -66,45 +67,24 @@ class Visualize:
         cv2.waitKey(1)
 
     def visualize_as_point_cloud(self,T=None):
-        
-        self.landmark_points = []
-        colors = []
-
-        for lm in self.landmark_manager.landmark_map.values():
-            self.landmark_points.append(lm.position)
-
-            if lm.active:
-                colors.append([1, 0, 0])  #
-            else:
-                colors.append([0, 0, 0])  # ⚫ Black
-
-        np_points = np.array(self.landmark_points)
-        np_points = (np.array([[0,1,0],[1,0,0],[0,0,-1]])@np_points.T).T
-        np_colors = np.array(colors)
-
+        np_points = np.array([lm.position for lm in self.landmark_manager.landmark_map.values()])
+        np_colors = np.zeros((np_points.shape[0], 3))
+        active_mask = np.array([lm.active for lm in self.landmark_manager.landmark_map.values()])
+        np_colors[active_mask] = [1, 0, 0]
         self.pcd_landmarks.points = o3d.utility.Vector3dVector(np_points)
         self.pcd_landmarks.colors = o3d.utility.Vector3dVector(np_colors)
-    
-
+        self.pcd_landmarks.transform(self.R_transform)
         self.vis.update_geometry(self.pcd_landmarks)
 
         if T is not None:
             pose = T[:3, 3]
-            pose = (np.array([[0,1,0],[1,0,0],[0,0,-1]])@pose.T).T
             self.traj_points.append(pose)
 
             if len(self.traj_points) > 1:
-                self.traj_lines.append(
-                    [len(self.traj_points) - 2, len(self.traj_points) - 1]
-                )
-
-            self.traj_line_set.points = o3d.utility.Vector3dVector(
-                np.array(self.traj_points)
-            )
+                self.traj_lines.append([len(self.traj_points) - 2, len(self.traj_points) - 1])
+            self.traj_line_set.points = o3d.utility.Vector3dVector(np.array(self.traj_points))
             self.traj_line_set.lines = o3d.utility.Vector2iVector(self.traj_lines)
-            self.traj_line_set.colors = o3d.utility.Vector3dVector(
-                [[0, 0, 1] for _ in self.traj_lines]
-            )
+            self.traj_line_set.colors = o3d.utility.Vector3dVector([[0, 0, 1] for _ in self.traj_lines])
 
             self.vis.update_geometry(self.traj_line_set)
         

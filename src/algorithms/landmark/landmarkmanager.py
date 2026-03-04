@@ -1,6 +1,6 @@
 import numpy as np
 from .landmarks import Landmark
-import cv2
+import logging
 
 
 class LandmarkManager:
@@ -30,7 +30,7 @@ class LandmarkManager:
         if landmark:
             landmark.active=False
         else:
-            print(f"Landmark with ID {id} not found.")
+            logging.debug(f"Landmark with ID {id} not found.")
 
     def get_landmark_by_id(self,id):
         if id in self.landmark_map:

@@ -188,8 +188,8 @@ class Stereo :
          # Homogeneous coordinates (N,4)
 
         for pt in pts3d:
-            if pt[2]>=20:
-                pt[2]=20
+            if pt[2]>=10:
+                pt[2]=10
             if pt[2]<=0:
                 pt[2]=0
         ones = np.ones((pts3d.shape[0], 1))
