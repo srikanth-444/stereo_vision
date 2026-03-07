@@ -85,6 +85,7 @@ class Visualize:
             self.traj_line_set.points = o3d.utility.Vector3dVector(np.array(self.traj_points))
             self.traj_line_set.lines = o3d.utility.Vector2iVector(self.traj_lines)
             self.traj_line_set.colors = o3d.utility.Vector3dVector([[0, 0, 1] for _ in self.traj_lines])
+            self.traj_line_set.transform(self.R_transform)
 
             self.vis.update_geometry(self.traj_line_set)
         

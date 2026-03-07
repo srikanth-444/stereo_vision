@@ -14,3 +14,6 @@ venv/
 # Other large folders
 camera_mat/
 images/
+
+**/build/
+*.so

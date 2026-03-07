@@ -1,27 +1,21 @@
 import numpy as np
-from scipy.spatial import KDTree
 import cv2
 
 class Frame():
-    def __init__(self,id,camera_id, frame, time_stamp,intrinsic,extrinsic,keyframe=False,):
+    def __init__(self,id,camera,frame, time_stamp, keyframe=False,):
         self.id=id
-        self.camera_id=camera_id
+        self.camera=camera
         self.frame=frame
         self.timestamp=time_stamp
         self.keyframe=keyframe
-        self.intrinsic=intrinsic
-        self.extrinsic=extrinsic
-
         self.camera_center=None
+
         self.keypoint_landmarks_association={}
         self.all_descriptors=[]
-        self.bag_of_words=[]
         self.T=np.array([])
         self.keypoints=[]
-        self.tree=[]
-        self.height, self.width = 480, 752 
-        self.debug_img = np.zeros((self.height,self.width, 3), dtype=np.uint8)
-        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+        # self.height, self.width = 480, 752 
+        # self.debug_img = np.zeros((self.height,self.width, 3), dtype=np.uint8)
         
 
     def get_camera_center(self,):
@@ -42,15 +36,34 @@ class Frame():
 
     def set_keypoints(self, keypoints):
         self.keypoints=np.array(keypoints)
-        self.image_points=np.array([kp.pt for kp in self.keypoints])
-        self.not_associated_points=set(range(len(self.image_points)))
-        self.tree = KDTree(self.image_points)
+        self.image_points=self.keypoints[:,0:2]
+        self.not_associated_points=set(range(self.image_points.shape[0]))
+
+    def drop_not_associated_points(self,):
+        if not self.not_associated_points:
+            return  # nothing to drop
+
+        keep_indices = sorted(set(range(self.image_points.shape[0])) - self.not_associated_points)
+
+        # Filter keypoints
+        self.keypoints = self.keypoints[keep_indices]
+
+        # Filter image_points
+        self.image_points = self.image_points[keep_indices]
+
+        # Filter descriptors
+        if len(self.all_descriptors) > 0:
+            self.all_descriptors = self.all_descriptors[keep_indices]
+
+        # Reset not_associated_points
+        self.not_associated_points = set()
+        
 
     def set_descriptors(self,decriptors):
-        self.all_descriptors=decriptors
+        self.all_descriptors=np.array(decriptors, dtype=np.uint8)
 
     def get_not_associated_kps(self,):
-        return self.keypoints[list(self.not_associated_points)]
+        return self.image_points[list(self.not_associated_points)]
     
     def get_not_associated_des(self,):
         return self.all_descriptors[list(self.not_associated_points)]
@@ -70,12 +83,12 @@ class Frame():
         if T is None:
             pts_cam = self.T @ pts3d_hom.T   
         else:
-            pts_cam = np.linalg.inv(T@self.extrinsic) @ pts3d_hom.T          # (4,N)
+            pts_cam = np.linalg.inv(T@self.camera.extrinsic) @ pts3d_hom.T          # (4,N)
 
         # Z = pts_cam[2, :]                      # depth values
 
         # Project to image
-        pts_2d = self.intrinsic @ pts_cam[:3, :]    # (3,N)
+        pts_2d = self.camera.intrinsic @ pts_cam[:3, :]    # (3,N)
         pts_2d = pts_2d / pts_2d[2, :]         # normalize
         pts_2d=pts_2d[:2,:]
 
@@ -88,7 +101,7 @@ class Frame():
         return pts_2d.T
     def global_matches(self,landmark_desc,land_ids):
         final_matches=[]
-        matches = self.bf.knnMatch(landmark_desc, self.all_descriptors,k=2)
+        matches = self.camera.feature_extractor.bf.knnMatch(landmark_desc, self.all_descriptors,k=2)
 
         for m, n in matches:
             # Lowe's ratio test
@@ -106,29 +119,26 @@ class Frame():
         land_ids=[lm.id for lm in landmarks]
         projected_points =self.project_landmarks(object_points,T)
         final_matches=[]
-        matches = self.bf.knnMatch(landmark_desc, self.all_descriptors, k=2)
+        global_matches=[]
+        matches = self.camera.feature_extractor.bf.knnMatch(landmark_desc, self.all_descriptors, k=2)
         for i, m_list in enumerate(matches):
             if len(m_list) < 2: continue
             m, n = m_list[0], m_list[1]
 
             # 3. Ratio & Distance Thresholds
             if m.distance < 0.9 * n.distance and m.distance < 40:
-                
-                # 4. THE GEOMETRIC MASK (Replaces the KD-Tree)
-                # Check if the matched keypoint is actually near where we projected it
+                global_matches.append(m)
                 matched_kp_pt = self.image_points[m.trainIdx]
-                proj_pt = projected_points[i]
-                
-                # L2 distance check: sqrt((x1-x2)^2 + (y1-y2)^2) < 10
-                # Faster version: squared distance < 100
+                proj_pt = projected_points[m.queryIdx]
                 dist_sq = np.sum((matched_kp_pt - proj_pt)**2)
-                
                 if dist_sq < 100: # 10 pixel radius
                     m.queryIdx = i # landmark index
                     final_matches.append(m)
-                    self.keypoint_landmarks_association[m.trainIdx] = land_ids[i] 
-        # if len(final_matches)<20:
-        # final_matches=self.global_matches(landmark_desc,land_ids)
+                     
+        if len(final_matches)<20:
+            final_matches=global_matches
+        for m in final_matches:
+            self.keypoint_landmarks_association[m.trainIdx] = land_ids[m.queryIdx]
         matched_objects=np.array([object_points[m.queryIdx] for m in final_matches])
         matched_images=np.array([self.image_points[m.trainIdx] for m in final_matches])
         matched_indices = {m.trainIdx for m in final_matches}  # indices of matched keypoints

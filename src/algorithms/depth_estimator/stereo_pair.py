@@ -62,8 +62,8 @@ class Stereo :
         3. Filters matches based on Y-alignment (Epipolar Constraint)
         """
         # Get raw coordinates
-        pts_l_raw = np.array([kp.pt for kp in kps_l])
-        pts_r_raw = np.array([kp.pt for kp in kps_r])
+        pts_l_raw = kps_l
+        pts_r_raw = kps_r
 
         # Step 1: Rectify keypoints
         rect_l = self.rectify_pts(pts_l_raw, 'left')

@@ -22,7 +22,7 @@ class DescriptorTracker(Tracker):
             logging.debug(f"length of matched points {len(matched_objects)}")
             if len(matched_objects) < 20:
                 return None, None
-            rvec_new, tvec_new, inliers = self.pnp_solver.estimate_pose_pnp(matched_objects,matched_images,frame.intrinsic)
+            rvec_new, tvec_new, inliers = self.pnp_solver.estimate_pose_pnp(matched_objects,matched_images,frame.camera.intrinsic)
             if inliers is None:
                 return None,None
             frame.set_world_to_camere(rvec_new,tvec_new)

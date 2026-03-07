@@ -4,20 +4,20 @@ from scipy.optimize import least_squares
 # import matplotlib.pyplot as plt
 
 class Camera:
-    def __init__(self, intrinsic, distortion, extrinsic, interface,w,h):
+    def __init__(self, intrinsic, distortion, extrinsic, interface,w,h,feature_extractor):
         fx= intrinsic.get('fx')
         fy= intrinsic.get('fy')
         cx= intrinsic.get('cx')
         cy= intrinsic.get('cy')
 
         T=np.array(extrinsic).reshape(4,4)
-        
         distortion=np.array(distortion.get('distortion_coefficients',[]),dtype=np.float32)
         self.intrinsic=np.array([[fx, 0, cx],[0, fy, cy],[0, 0, 1]])
         self.distortion=distortion
         self.extrinsic=T
         self.interface=interface
         self.new_intrinsic, _ = cv2.getOptimalNewCameraMatrix(self.intrinsic, self.distortion, (w,h), 1)
+        self.feature_extractor=feature_extractor
         
 
     def get_intrinsic(self,):

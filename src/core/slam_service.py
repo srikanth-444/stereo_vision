@@ -10,7 +10,7 @@ from ..interfaces import interface_factory
 from .. utils.visualize import Visualize
 from ..algorithms.frame import FrameManager
 import logging
-from multiprocessing import Process, Manager
+
 
 def start_service():
     logging.basicConfig(
@@ -26,6 +26,10 @@ def start_service():
     logging.info("Identifying sensors...")
     cameras_config=sensor_config.get('cameras',{})
     camera_map={}
+
+    pipeline_config=config.get('pipe_line',{})
+    visual_odometry_config=pipeline_config.get('visual_odometry',{})
+    
     for camera_config in cameras_config:
         intrinsic=camera_config.get('intrinsic',{})
         extrinsic= camera_config.get('extrinsic',{})
@@ -33,22 +37,24 @@ def start_service():
         interface_config= camera_config.get('interface',{})
         interface=interface_factory(interface_config)
         [w,h]=camera_config.get('resolution',[0,0])
-        camera=Camera(intrinsic=intrinsic, extrinsic=extrinsic,distortion=distortion, interface=interface,w=w,h=h)
+        feature_extractor_config=visual_odometry_config.get('feature_extractor',{})
+        feature_extractor=feature_extractor_factory(feature_extractor_config)
+        camera=Camera(intrinsic=intrinsic, extrinsic=extrinsic,distortion=distortion, interface=interface,w=w,h=h,feature_extractor=feature_extractor)
         camera_map[camera_config.get('ID',{})]=camera
         logging.info(f"Initialized camera with ID {camera_config.get('ID',{})}")    
 
-    pipeline_config=config.get('pipe_line',{})
+    
     logging.info("Initializing pipeline...")
 
     landmark_manager=LandmarkManager()
     frame_manager=FrameManager(camera_map=camera_map)
-    visual_odometry_config=pipeline_config.get('visual_odometry',{})
-    feature_extractor_config=visual_odometry_config.get('feature_extractor',{})
+
+    
     depth_estimator_config=visual_odometry_config.get('depth_estimator',{})
     tracker_config=visual_odometry_config.get('tracker',{})
     min_num_landmarks=visual_odometry_config.get('min_num_landmarks',100)
 
-    feature_extractor=feature_extractor_factory(feature_extractor_config)
+    
     tracker=tracker_factory(tracker_config,landmark_manager,camera_map[tracker_config.get('camera_id',0)])
     
     if depth_estimator_config.get('type')=='stereo':
@@ -56,7 +62,7 @@ def start_service():
         right_camera=camera_map[depth_estimator_config.get('right_camera_id',{})]
         depth_estimator=Stereo(left_camera,right_camera)
     visualize=Visualize(frame_manager, landmark_manager)
-    pipeline=pipeline_factory(landmark_manager, tracker, feature_extractor,frame_manager,depth_estimator,min_num_landmarks,visualize,camera_map)
+    pipeline=pipeline_factory(landmark_manager,tracker,frame_manager,depth_estimator,min_num_landmarks,visualize,camera_map)
     
     logging.info("Starting SLAM pipeline...")
     pipeline.run()

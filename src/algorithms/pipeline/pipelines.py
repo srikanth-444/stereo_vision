@@ -1,18 +1,18 @@
 import numpy as np
 import cv2
-from ..loopclosure import Loop_closure
 import time
-import gtsam
+
 from scipy.spatial.transform import Rotation as R
 import logging
+import threading
+import objgraph
 
 class Pipeline():
 
-    def __init__(self, landmark_manager, tracker, feature_extractor,frame_manager,depth_estimator,min_num_landmarks=100,visualizer=None,camera_map=None):
+    def __init__(self, landmark_manager, tracker,frame_manager,depth_estimator,min_num_landmarks=100,visualizer=None,camera_map=None):
         self.landmark_manager=landmark_manager
         self.frame_manager=frame_manager
         self.tracker=tracker
-        self.feature_extractor=feature_extractor
         self.min_num_landmarks=min_num_landmarks
         self.depth_estimator=depth_estimator
         self.T=np.eye(4)
@@ -26,17 +26,25 @@ class Pipeline():
         
     def process_frame(self, frames):
         logging.debug(f"Number of frames: {len(frames)}")
-        kps={}
-        des_s={}
-        for frame in frames:
-                kp, des=self.feature_extractor.extract_features(frame.frame)
-                frame.set_keypoints(kp)
-                frame.set_descriptors(des)
-                kps[frame.camera_id]=kp
-                des_s[frame.camera_id]=des
-                
 
-        return kps, des_s
+        def process_single_frame(frame):
+            start_time = time.time()
+            kp, des = frame.camera.feature_extractor.extract_features(frame.frame)
+            feature_extraction_time = int((time.time() - start_time) * 1000)
+            self.performance_logger.debug(f"feature_extraction {feature_extraction_time}ms")
+            frame.set_keypoints(kp)
+            frame.set_descriptors(des)
+
+        threads = []
+        for frame in frames:
+            t = threading.Thread(target=process_single_frame, args=(frame,))
+            t.start()
+            threads.append(t)
+
+        # Wait for all threads to finish
+        for t in threads:
+            t.join()
+        
     
     def estimate_depth(self, left_frame, right_frame):
         if  self.depth_estimator.__class__.__name__ == "Stereo":
@@ -54,9 +62,9 @@ class Pipeline():
             start_time=time.time()
             matches = self.depth_estimator.stereo_match(kp_l, kp_r, des_l, des_r)
             matches = sorted(matches, key=lambda x: x.distance)
-            ptsL = np.float32([kp_l[m.queryIdx].pt for m in matches]).reshape(-1,2)
+            ptsL = np.float32([kp_l[m.queryIdx] for m in matches]).reshape(-1,2)
             desL = np.array([des_l[m.queryIdx] for m in matches])
-            ptsR = np.float32([kp_r[m.trainIdx].pt for m in matches]).reshape(-1,2)
+            ptsR = np.float32([kp_r[m.trainIdx] for m in matches]).reshape(-1,2)
             filteredkeypoint_ids=np.array([left_not_associated_points[m.queryIdx]for m in matches])
             stereo_match_time=int((time.time()-start_time)*1000)
             
@@ -90,6 +98,7 @@ class Pipeline():
                     keyframe = self.frame_manager.keyframe_map[frame_id]
                     landmark_ids.update(keyframe.get_land_ids())
                     self.landmark_manager.remove_bad_landmarks(landmark_ids)
+                    keyframe.drop_not_associated_points()
                 return pts_3d
        
     def compute_trajectory(self,rvec, tvec):
@@ -165,12 +174,12 @@ class Pipeline():
             if len(frames)==0:
                 logging.critical("No frames received from source. Shutting down pipeline.")
                 exit(0)
-            current_frame=[frame for frame in frames if frame.camera_id==0][0]
+            current_frame=frames[0]
             capture_time=int((time.time()-start_time)*1000)
 
             #process frame
             start_time=time.time()
-            self.process_frame(frames)
+            self.process_frame(frames.values())
             process_time=int((time.time()-start_time)*1000)
 
             #tracking
@@ -223,7 +232,7 @@ class Pipeline():
 
                 # triangulate points
                 start_time=time.time()   
-                pts_3d, pts, des, depth_bins, keypoint_idx=self.estimate_depth(current_frame,[frame for frame in frames if frame.camera_id==1][0])
+                pts_3d, pts, des, depth_bins, keypoint_idx=self.estimate_depth(current_frame,frames[1])
                 depth_time=int((time.time()-start_time)*1000)
 
                 # adding landmarks
@@ -240,15 +249,15 @@ class Pipeline():
             start_time=time.time()
             self.visualizer.visualize_pipeline(current_frame)
             # self.visualizer.visualize_as_point_cloud(self.T)
-            for frame in frames:
+            for frame in frames.values():
                 frame.frame=None  
             gui_time=int((time.time()-start_time)*1000)
             
             
             self.performance_logger.info(f"capture {capture_time}ms | Process {process_time}ms | close lm {get_landmark_time}ms | motion_model {pose_time}ms | tracking {tracking_time}ms | depth {depth_time}ms |creat lm {landmarks_time}ms | gui {gui_time}ms")
             
-            
+            # objgraph.show_growth(limit=10)
             
 
-def pipeline_factory( landmark_manager, tracker, feature_extractor,camera,depth_estimator,min_num_landmarks=100,visualizer=None,camera_map=None):
-    return Pipeline(landmark_manager, tracker, feature_extractor,camera,depth_estimator,min_num_landmarks,visualizer,camera_map)
+def pipeline_factory( landmark_manager, tracker,camera,depth_estimator,min_num_landmarks=100,visualizer=None,camera_map=None):
+    return Pipeline(landmark_manager, tracker,camera,depth_estimator,min_num_landmarks,visualizer,camera_map)

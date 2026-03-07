@@ -53,7 +53,7 @@ pipe_line:
       type: "ORB"
       nfeatures: 1200
       scale_factor: 1.2
-      n_levels: 8
+      nlevels: 8
       edgeThreshold: 31
       firstLevel: 0
       patchSize: 31
@@ -68,7 +68,7 @@ pipe_line:
     tracker:
       type: "descriptor"
       reprojection_error: 3.0
-      iterationsCount: 1000
+      iterationsCount: 200
       confidence: 0.01
       FB_MAX_DIST: 1.0
       win_size: 31
