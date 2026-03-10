@@ -34,19 +34,25 @@ py::array mat_to_numpy_copy(const cv::Mat& mat)
 }
 
 
-py::array keypoints_to_numpy(const std::vector<cv::KeyPoint> &kps)
-{
-    py::array result({(size_t)kps.size(), 6});
-    auto ptr = (float*)result.mutable_data();
-    for (size_t i = 0; i < kps.size(); ++i)
-    {
-        ptr[i*6 + 0] = kps[i].pt.x;
-        ptr[i*6 + 1] = kps[i].pt.y;
-        ptr[i*6 + 2] = kps[i].size;
-        ptr[i*6 + 3] = kps[i].angle;
-        ptr[i*6 + 4] = kps[i].response;
-        ptr[i*6 + 5] = kps[i].octave;
+py::array_t<float> keypoints_to_numpy(const std::vector<cv::KeyPoint> &kps) {
+    // 1. Explicitly define the shape
+    std::vector<size_t> shape = { kps.size(), 6 };
+    
+    // 2. Use the typed array_t constructor
+    py::array_t<float> result(shape);
+    
+    // 3. Use a proxy for high-speed, direct memory access
+    auto buf = result.mutable_unchecked(); 
+
+    for (size_t i = 0; i < kps.size(); ++i) {
+        buf(i, 0) = kps[i].pt.x;
+        buf(i, 1) = kps[i].pt.y;
+        buf(i, 2) = kps[i].size;
+        buf(i, 3) = kps[i].angle;
+        buf(i, 4) = kps[i].response;
+        buf(i, 5) = static_cast<float>(kps[i].octave);
     }
+
     return result;
 }
 
@@ -86,14 +92,18 @@ PYBIND11_MODULE(orb_slam_features, m) {
 
             // img = img.clone();  // safe copy
             // std::cout << "[DEBUG] CV type: " << img.type() << ", rows=" << img.rows << ", cols=" << img.cols << std::endl;
+            
+            
             std::vector<cv::KeyPoint> keypoints;
             cv::Mat descriptors;
             std::vector<int> lap_area = {0, img.cols};
-
+            
+            {
+            py::gil_scoped_release release;
             self(img, cv::noArray(), keypoints, descriptors, lap_area);
             // std::cout << "[DEBUG] Number of keypoints: " << keypoints.size() << std::endl;
             // std::cout << "[DEBUG] Descriptor size: " << descriptors.rows << " x " << descriptors.cols << std::endl;
-
+            }
             py::array desc_np = mat_to_numpy_copy(descriptors);
 
             py::array keypoints_np = keypoints_to_numpy(keypoints);

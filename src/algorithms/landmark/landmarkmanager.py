@@ -13,10 +13,8 @@ class LandmarkManager:
         
        
 
-    def add_landmark(self,position,image_points,descriptor,frame_id):
-        landmark=Landmark(self.id_counter, position, image_points,descriptor,frame_id)
-        position=np.floor(position/0.1).astype(int)
-        self.poistion_3d[position[0],position[1],position[2]]=landmark
+    def add_landmark(self,position,frame,feature_id):
+        landmark=Landmark(self.id_counter, position,frame,feature_id)
         self.landmark_map[landmark.id] = landmark
         self.active_ids.add(landmark.id)
         self.id_counter+=1
@@ -63,26 +61,45 @@ class LandmarkManager:
         if landmark.active
     }
     
-    def remove_bad_landmarks(self,ids):
-        for id in ids:
+    def remove_bad_landmarks(self,landmarks):
+        land_ids=[lm.id for lm in landmarks]
+        
+        for id in land_ids:
             if id not in self.landmark_map:
                 continue
             landmark=self.get_landmark_by_id(id)
             landmark.active=False
             if landmark.get_found_ratio()<0.25 or landmark.tracked<=2:
                 del(self.landmark_map[id])
-        
+                # print(landmark.id)
+                for frame ,idx in landmark.observations.items():
+                    frame.landmarks[idx]=None
 
-    def merge_landamrks(self, ids):
-        if len(ids) < 2:
+    def merge_landamrks(self, landmarks):
+        if len(landmarks) < 2:
             return
-        ids = list(ids)
+        landmarks = list(landmarks)
+        
+        ids=[lm.id for lm in landmarks]
+        # print(f"ids{ids}")
         survivor_id = min(ids)
+        # print(f"survivor {survivor_id}")
         survivor = self.get_landmark_by_id(survivor_id)
         for id in ids:
             if id != survivor_id:
+                # print(id)
                 landmark=self.get_landmark_by_id(id)
-                survivor.add_observation(landmark.frame_id, landmark.image_points,landmark.descriptor)
-                self.landmark_map[id]=survivor
+                if landmark is None:
+                    continue
+                for frame in landmark.observations.keys():
+                    # print(frame.id)
+                    idx=frame.keypoint_landmarks_association[landmark]
+                    frame.keypoint_landmarks_association[survivor]=idx
+                    frame.landmarks_keypoint_association[idx]=survivor
+                    survivor.observations[frame]=frame.image_points[idx]
+                    survivor.tracked=survivor.tracked+1
+                    del(frame.keypoint_landmarks_association[landmark])
+                del(self.landmark_map[id])
+
 
     

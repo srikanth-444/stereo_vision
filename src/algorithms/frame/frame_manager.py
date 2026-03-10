@@ -7,6 +7,7 @@ class FrameManager():
         self.camera_map=camera_map
         self.keyframe_map={}
         self.index=0
+        
     def capture_frames(self):
         current_frames={}
         for camera_id, camera in self.camera_map.items():
@@ -21,6 +22,10 @@ class FrameManager():
     def set_keyframe(self, frame):
         frame.keyframe=True
         self.keyframe_map[frame.id]=frame
+        for id,landmark in enumerate(frame.landmarks):
+            if landmark is None:
+                continue
+            landmark.add_observation(frame,id)
     
     def get_last_keyframe(self):
         my_list = sorted(list(self.keyframe_map.keys()))

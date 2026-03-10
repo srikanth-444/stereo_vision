@@ -55,75 +55,94 @@ class Stereo :
             rect = cv2.undistortPoints(pts, self.r_K, self.r_dist, R=self.R2, P=self.P2)
         return rect.reshape(-1, 2)
 
-    def stereo_match(self, kps_l, kps_r, des_l, des_r, epipolar_threshold=3.0):
-        """
-        1. Rectifies keypoints
-        2. Matches descriptors
-        3. Filters matches based on Y-alignment (Epipolar Constraint)
-        """
-        # Get raw coordinates
-        pts_l_raw = kps_l
-        pts_r_raw = kps_r
+    # def stereo_match(self, kps_l, kps_r, des_l, des_r, epipolar_threshold=3.0):
+    #     """
+    #     1. Rectifies keypoints
+    #     2. Matches descriptors
+    #     3. Filters matches based on Y-alignment (Epipolar Constraint)
+    #     """
+    #     # Get raw coordinates
+    #     pts_l_raw = kps_l
+    #     pts_r_raw = kps_r
 
-        # Step 1: Rectify keypoints
-        rect_l = self.rectify_pts(pts_l_raw, 'left')
-        rect_r = self.rectify_pts(pts_r_raw, 'right')
-        # self.plot_points(rect_l,(0,0,255))
-        # self.plot_points(rect_r,(255,0,0))
+    #     # Step 1: Rectify keypoints
+    #     rect_l = self.rectify_pts(pts_l_raw, 'left')
+    #     rect_r = self.rectify_pts(pts_r_raw, 'right')
+    #     # self.plot_points(rect_l,(0,0,255))
+    #     # self.plot_points(rect_r,(255,0,0))
         
-        # cv2.imshow("stereo Debug", self.debug_img)
-        # cv2.waitKey(0)
-        row_dict={}
-        final_matches=[]
-        unique_index=set()
-        for i,pt in enumerate(rect_r):
-            round_y=max(0,min(round(pt[1]),self.height))
-            try:
-                row_dict[round_y].add(i)
-            except KeyError:
-                row_dict[round_y]=set()
-                row_dict[round_y].add(i)
-        for i,pt in enumerate(rect_l):
-            round_y=max(0,min(round(pt[1]),self.height))
-            candidate_indices=[]
-            for y in range(round_y-2,round_y+3):
-                if y in row_dict:
-                    candidate_indices.extend(list(row_dict[y]))
-            if len(candidate_indices)==0:
-                continue
-            candiate_des=des_r[candidate_indices]
-            matches=self.bf.knnMatch(des_l[i].reshape(1, -1), candiate_des, k=2)
-            if len(matches) == 0 or len(matches[0]) < 2:
-                continue
-            m, n = matches[0]
-            # print(f"matches ratio {m.distance/n.distance} m.distance{m.distance}")
-            if m.distance < 0.8 * n.distance and m.distance < 40:
-                global_train_idx = candidate_indices[m.trainIdx]
-
-                if global_train_idx not in unique_index:
-                    unique_index.add(global_train_idx)
-                    m.trainIdx=candidate_indices[m.trainIdx]
-                    m.queryIdx=i
-                    final_matches.append(m) 
-        # print(f"stereo matches {len(final_matches)}")
-        return final_matches
-    
-    # def stereo_match(self,des_l,des_r):
-    #     # Ensure numpy arrays
-    #     des_l = np.array(des_l, dtype=np.uint8)
-    #     des_r = np.array(des_r, dtype=np.uint8)
-
-    #     matches_knn = self.bf.knnMatch(des_l, des_r, k=2)
-
-    #     final_matches = []
-    #     for knn in matches_knn:
-    #         if len(knn) < 2:
+    #     # cv2.imshow("stereo Debug", self.debug_img)
+    #     # cv2.waitKey(0)
+    #     row_dict={}
+    #     final_matches=[]
+    #     unique_index=set()
+    #     for i,pt in enumerate(rect_r):
+    #         round_y=max(0,min(round(pt[1]),self.height))
+    #         try:
+    #             row_dict[round_y].add(i)
+    #         except KeyError:
+    #             row_dict[round_y]=set()
+    #             row_dict[round_y].add(i)
+    #     for i,pt in enumerate(rect_l):
+    #         round_y=max(0,min(round(pt[1]),self.height))
+    #         candidate_indices=[]
+    #         for y in range(round_y-2,round_y+3):
+    #             if y in row_dict:
+    #                 candidate_indices.extend(list(row_dict[y]))
+    #         if len(candidate_indices)==0:
     #             continue
-    #         m, n = knn
-    #         if m.distance < 0.7 * n.distance and m.distance < 50:
-    #             final_matches.append(m)
+    #         candiate_des=des_r[candidate_indices]
+    #         matches=self.bf.knnMatch(des_l[i].reshape(1, -1), candiate_des, k=2)
+    #         if len(matches) == 0 or len(matches[0]) < 2:
+    #             continue
+    #         m, n = matches[0]
+    #         # print(f"matches ratio {m.distance/n.distance} m.distance{m.distance}")
+    #         if m.distance < 0.8 * n.distance and m.distance < 40:
+    #             global_train_idx = candidate_indices[m.trainIdx]
 
+    #             if global_train_idx not in unique_index:
+    #                 unique_index.add(global_train_idx)
+    #                 m.trainIdx=candidate_indices[m.trainIdx]
+    #                 m.queryIdx=i
+    #                 final_matches.append(m) 
+    #     # print(f"stereo matches {len(final_matches)}")
     #     return final_matches
+    
+    def stereo_match(self, kps_l, kps_r, des_l, des_r, epipolar_threshold=3.0):
+        # 1. Rectify all points at once (vectorized)
+        rect_l = self.rectify_pts(kps_l, 'left')
+        rect_r = self.rectify_pts(kps_r, 'right')
+
+        # 2. Match everything in one batch call (C++ optimized)
+        # k=2 for the ratio test
+        raw_matches = self.bf.knnMatch(des_l, des_r, k=2)
+
+        final_matches = []
+        used_right_indices = set()
+
+        for m_list in raw_matches:
+            if len(m_list) < 2:
+                continue
+                
+            m, n = m_list
+            
+            # 3. Apply Lowe's Ratio Test + Absolute distance threshold
+            if m.distance < 0.8 * n.distance and m.distance < 40:
+                idx_l = m.queryIdx
+                idx_r = m.trainIdx
+                
+                # 4. Epipolar Constraint: Check if Y-coordinates are aligned
+                # After rectification, y_left should equal y_right
+                y_diff = abs(rect_l[idx_l][1] - rect_r[idx_r][1])
+                
+                if y_diff < epipolar_threshold:
+                    # 5. Check for horizontal sanity (x_left > x_right for standard stereo)
+                    if rect_l[idx_l][0] > rect_r[idx_r][0]:
+                        if idx_r not in used_right_indices:
+                            final_matches.append(m)
+                            used_right_indices.add(idx_r)
+                            
+        return final_matches
         
     def plot_points(self,points,color):
         # Draw projected landmarks in red

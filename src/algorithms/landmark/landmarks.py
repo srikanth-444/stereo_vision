@@ -2,21 +2,19 @@ import numpy as np
 import cv2
 
 class Landmark:
-    def __init__(self,id, position, image_points,descriptor,frame_id):
+    def __init__(self,id, position,frame, feature_id):
         self.position=position
-        self.image_points=image_points
-        self.descriptor=descriptor
+        self.descriptor=frame.descriptors[feature_id]
         self.id=id
-        self.frame_id=frame_id
+        self.frame=frame
         self.active=True
-
-        self.observations=[{'frame_id':self.frame_id, 'image_point':self.image_points}]
+        self.observations={}
+        self.observations[self.frame]=feature_id
         self.confidence=None
-        self.all_descriptors=[descriptor]
+        self.all_descriptors=[self.descriptor]
         self.normal_vector = None
         self.nvisible=1
         self.tracked=1
-
         self.is_bad=False
 
     def set_landmark_as_bad(self):
@@ -34,25 +32,27 @@ class Landmark:
         current_dist = np.linalg.norm(vec_to_cam)
         unit_vec_to_cam = vec_to_cam / current_dist
 
-        # 1. Distance Check: Is it too far or too close compared to the original?
-        # Default: Must be between 0.5x and 2.0x of the original distance
         if current_dist > self.reference_dist * dist_ratio_thresh or \
            current_dist < self.reference_dist / dist_ratio_thresh:
             return False
 
-        # 2. View Angle Check: Are we looking at the 'face' of the point?
-        # Uses dot product to ensure we aren't viewing from a sharp side angle
         cos_theta = np.dot(unit_vec_to_cam, self.normal_vector)
         if cos_theta < np.cos(np.radians(angle_thresh_deg)):
             return False
         return True
         
-    def add_observation(self,id, image_point,descriptor):  
-        observation={'frame_id':id, 'image_point':image_point}
-        self.observations.append(observation)
-        self.all_descriptors.append(descriptor)
-        self.update_descriptor()
-        self.tracked=self.tracked+1
+    def add_observation(self,frame, feature_id): 
+        self.tracked=self.tracked+1 
+        self.observations[frame]=feature_id
+        self.all_descriptors.append(frame.descriptors[feature_id])
+        if len(self.observations)>5:
+            self.update_descriptor()
+    
+    def strip_landmark(self,):
+        self.descriptor = None
+        self.all_descriptors = []
+        # self.position = None
+        self.active=False
 
     def update_descriptor(self):
         if len(self.observations) < 2:
@@ -74,3 +74,6 @@ class Landmark:
 
     def get_found_ratio(self):
         return self.tracked / self.nvisible if self.nvisible > 0 else 0
+    
+    
+

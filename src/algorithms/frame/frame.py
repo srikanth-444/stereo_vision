@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+from collections import defaultdict
 
 class Frame():
     def __init__(self,id,camera,frame, time_stamp, keyframe=False,):
@@ -10,10 +11,14 @@ class Frame():
         self.keyframe=keyframe
         self.camera_center=None
 
-        self.keypoint_landmarks_association={}
-        self.all_descriptors=[]
+
+        
+        # self.keypoint_landmarks_association={}
+        # self.landmarks_keypoint_association={}
         self.T=np.array([])
         self.keypoints=[]
+        self.landmarks=[]
+        self.descriptors=[]
         # self.height, self.width = 480, 752 
         # self.debug_img = np.zeros((self.height,self.width, 3), dtype=np.uint8)
         
@@ -37,6 +42,7 @@ class Frame():
     def set_keypoints(self, keypoints):
         self.keypoints=np.array(keypoints)
         self.image_points=self.keypoints[:,0:2]
+        self.landmarks=[None]*len(self.keypoints)
         self.not_associated_points=set(range(self.image_points.shape[0]))
 
     def drop_not_associated_points(self,):
@@ -52,27 +58,28 @@ class Frame():
         self.image_points = self.image_points[keep_indices]
 
         # Filter descriptors
-        if len(self.all_descriptors) > 0:
-            self.all_descriptors = self.all_descriptors[keep_indices]
+        if len(self.descriptors) > 0:
+            self.descriptors = self.descriptors[keep_indices]
 
         # Reset not_associated_points
         self.not_associated_points = set()
         
 
     def set_descriptors(self,decriptors):
-        self.all_descriptors=np.array(decriptors, dtype=np.uint8)
+        self.descriptors=np.array(decriptors, dtype=np.uint8)
 
     def get_not_associated_kps(self,):
         return self.image_points[list(self.not_associated_points)]
     
     def get_not_associated_des(self,):
-        return self.all_descriptors[list(self.not_associated_points)]
+        return self.descriptors[list(self.not_associated_points)]
     
-    def get_land_ids(self,):
-        return self.keypoint_landmarks_association.values()
+    def get_landmarks(self,):
+        return [lm for lm in self.landmarks if lm is not None]
     
     def get_tracked_points(self,):
-        return self.image_points[list(self.keypoint_landmarks_association.keys())]
+        associated_idx = list(set(range(len(self.image_points))) - self.not_associated_points)
+        return self.image_points[associated_idx]
     
     def project_landmarks(self, pts_3d, T=None):
 
@@ -99,35 +106,26 @@ class Frame():
         # pts_2d_with_bins = np.vstack((pts_2d, depth_bins))
 
         return pts_2d.T
-    def global_matches(self,landmark_desc,land_ids):
-        final_matches=[]
-        matches = self.camera.feature_extractor.bf.knnMatch(landmark_desc, self.all_descriptors,k=2)
-
-        for m, n in matches:
-            # Lowe's ratio test
-            if m.distance < 0.9 * n.distance and m.distance < 40:
-                    final_matches.append(m)
-                    self.keypoint_landmarks_association[m.trainIdx]=land_ids[m.queryIdx] 
-
-        return final_matches
+  
 
     def projection_match(self,landmarks,T=None):
         
-        
+        matched_idx=set()
         object_points = np.array([lm.position for lm in landmarks])
         landmark_desc = np.array([lm.descriptor for lm in landmarks],dtype=np.uint8)
-        land_ids=[lm.id for lm in landmarks]
         projected_points =self.project_landmarks(object_points,T)
         final_matches=[]
         global_matches=[]
-        matches = self.camera.feature_extractor.bf.knnMatch(landmark_desc, self.all_descriptors, k=2)
+        matches = self.camera.feature_extractor.bf.knnMatch(landmark_desc, self.descriptors, k=2)
         for i, m_list in enumerate(matches):
             if len(m_list) < 2: continue
             m, n = m_list[0], m_list[1]
 
-            # 3. Ratio & Distance Thresholds
             if m.distance < 0.9 * n.distance and m.distance < 40:
+                if m.trainIdx in matched_idx:
+                    continue
                 global_matches.append(m)
+                matched_idx.add(m.trainIdx)
                 matched_kp_pt = self.image_points[m.trainIdx]
                 proj_pt = projected_points[m.queryIdx]
                 dist_sq = np.sum((matched_kp_pt - proj_pt)**2)
@@ -138,12 +136,12 @@ class Frame():
         if len(final_matches)<20:
             final_matches=global_matches
         for m in final_matches:
-            self.keypoint_landmarks_association[m.trainIdx] = land_ids[m.queryIdx]
+            self.landmarks[m.trainIdx]=landmarks[m.queryIdx]
         matched_objects=np.array([object_points[m.queryIdx] for m in final_matches])
         matched_images=np.array([self.image_points[m.trainIdx] for m in final_matches])
         matched_indices = {m.trainIdx for m in final_matches}  # indices of matched keypoints
         self.not_associated_points -= matched_indices        # remove them
-        matched_des =[self.all_descriptors[m.trainIdx] for m in final_matches]
+        matched_des =[self.descriptors[m.trainIdx] for m in final_matches]
         
 
         # self.plot_points(projected_points,(0,0,255))
@@ -157,6 +155,35 @@ class Frame():
         # cv2.waitKey(1)  # <-- Blocking! Waits until any key is pressed
         return matched_objects, matched_images, matched_des
     
+    def projection_match_merger(self,landmarks):
+        merging_land_ids = defaultdict(set)
+        object_points = np.array([lm.position for lm in landmarks])
+        landmark_desc = np.array([lm.descriptor for lm in landmarks],dtype=np.uint8)
+        projected_points =self.project_landmarks(object_points)
+        final_matches=[]
+        global_matches=[]
+        matches = self.camera.feature_extractor.bf.knnMatch(landmark_desc, self.descriptors, k=2)
+        for i, m_list in enumerate(matches):
+            if len(m_list) < 2: continue
+            m, n = m_list[0], m_list[1]
+
+            # 3. Ratio & Distance Thresholds
+            if m.distance < 0.7 * n.distance and m.distance < 40:
+                global_matches.append(m)
+                matched_kp_pt = self.image_points[m.trainIdx]
+                proj_pt = projected_points[m.queryIdx]
+                dist_sq = np.sum((matched_kp_pt - proj_pt)**2)
+                if dist_sq < 100: # 10 pixel radius
+                    m.queryIdx = i # landmark index
+                    final_matches.append(m)
+                    if m.trainIdx in self.landmarks_keypoint_association:
+                        existing_landmark= self.landmarks_keypoint_association[m.trainIdx]
+                        merging_land_ids[existing_landmark].add(landmarks[m.queryIdx])
+                    else:
+                        if landmarks[m.queryIdx] not in self.keypoint_landmarks_association:
+                            self.keypoint_landmarks_association[landmarks[m.queryIdx]] = m.trainIdx
+                            self.landmarks_keypoint_association[m.trainIdx]=landmarks[m.queryIdx]
+        return merging_land_ids
     def plot_points(self,points,color):
         # Draw projected landmarks in red
         for pt in points:

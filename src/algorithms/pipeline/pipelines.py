@@ -6,6 +6,7 @@ from scipy.spatial.transform import Rotation as R
 import logging
 import threading
 import objgraph
+import gc
 
 class Pipeline():
 
@@ -29,9 +30,12 @@ class Pipeline():
 
         def process_single_frame(frame):
             start_time = time.time()
+            thread_start=time.thread_time()
             kp, des = frame.camera.feature_extractor.extract_features(frame.frame)
             feature_extraction_time = int((time.time() - start_time) * 1000)
+            cpu_time=int((time.thread_time()-thread_start)*1000)
             self.performance_logger.debug(f"feature_extraction {feature_extraction_time}ms")
+            # self.performance_logger.info(f"process {cpu_time}ms")
             frame.set_keypoints(kp)
             frame.set_descriptors(des)
 
@@ -87,19 +91,38 @@ class Pipeline():
                 pts_3d_hom=np.hstack((pts_3d,np.ones((pts_3d.shape[0],1))))
                 pts_3d_hom=(self.T@pts_3d_hom.T).T
                 pts_3d=pts_3d_hom[:,:3]
-                for pt_3d, pt, des, idx in zip(pts_3d, pts_2d, des_s,keypoint_idx):
-                    landmark=self.landmark_manager.add_landmark(pt_3d, pt, des, current_frame.id)
+                for pt_3d,idx in zip(pts_3d, keypoint_idx):
+                    landmark=self.landmark_manager.add_landmark(pt_3d,current_frame,idx)
                     landmark.set_normal(camera_center)
                     landmark.set_reference_depth(camera_center)
-                    current_frame.keypoint_landmarks_association[idx]=landmark.id
+                    current_frame.landmarks[idx]=landmark
+                # if self.frame_manager.get_len_keyframes()>1:
+                #     self.merging_mappoints(current_frame)
                 if self.frame_manager.get_len_keyframes()>3:
+                    # print(self.frame_manager.find_closest_keyframe())
                     frame_id = self.frame_manager.find_closest_keyframe()[0]
-                    landmark_ids = set()
+                    landmarks=[]
                     keyframe = self.frame_manager.keyframe_map[frame_id]
-                    landmark_ids.update(keyframe.get_land_ids())
-                    self.landmark_manager.remove_bad_landmarks(landmark_ids)
+                    landmarks=keyframe.get_landmarks()
+                    self.landmark_manager.remove_bad_landmarks(landmarks)
                     keyframe.drop_not_associated_points()
+                     
                 return pts_3d
+        
+    def merging_mappoints(self,frame):
+        landmarks=[]
+        frame_ids = self.frame_manager.find_closest_keyframe()
+        for frame_id in frame_ids:
+            if frame_id is not frame.id:
+                keyframe = self.frame_manager.keyframe_map[frame_id]
+                landmarks.extend(keyframe.get_landmarks())
+        landmarks=[lm for lm in landmarks if lm is not None]
+        merger_ids=frame.projection_match_merger(landmarks)
+        # print(merger_ids)
+        for idx,ides in merger_ids.items():
+            ids = {idx} | ides
+            # print(ids)
+            self.landmark_manager.merge_landamrks(ids)
        
     def compute_trajectory(self,rvec, tvec):
         R, _ = cv2.Rodrigues(rvec)
@@ -111,29 +134,20 @@ class Pipeline():
         return T@np.linalg.inv(extrinsic)
     
     def get_closest_landmarks(self):
-        landmark_ids = set()
-        # Always add active landmarks
-        active_ids = self.frame_manager.get_last_keyframe().get_land_ids()
-        landmark_ids.update(active_ids)
-
+        landmarks = []
+        # # Always add active landmarks
         
-
+        self.frame_manager.get_last_keyframe().get_landmarks()
         # Convert back to landmark objects
-        landmarks = [
-            self.landmark_manager.get_landmark_by_id(lm_id)
-            for lm_id in landmark_ids
-        ]
+        landmarks = self.frame_manager.get_last_keyframe().get_landmarks()
         landmarks=[lm for lm in landmarks if lm is not None]
-        if len(landmarks)<100:
-            frame_ids = self.frame_manager.find_closest_keyframe()
-            for frame_id in frame_ids:
-                keyframe = self.frame_manager.keyframe_map[frame_id]
-                landmark_ids.update(keyframe.get_land_ids())
-        landmarks = [
-            self.landmark_manager.get_landmark_by_id(lm_id)
-            for lm_id in landmark_ids
-        ]
-        landmarks=[lm for lm in landmarks if lm is not None]
+        # if len(landmarks)<20:
+        #     frame_ids = self.frame_manager.find_closest_keyframe()
+        #     for frame_id in frame_ids:
+        #         keyframe = self.frame_manager.keyframe_map[frame_id]
+        #         landmarks.extend(keyframe.get_landmarks())
+        # # print(landmark_ids)
+        # landmarks=[lm for lm in landmarks if lm is not None]
         return landmarks
 
     def predict_next_pose(self,T_prev, T_curr,dt):
@@ -169,6 +183,8 @@ class Pipeline():
             i=i+1
 
             #capture frames
+            wall_time=time.time()
+            start_per_frame=time.thread_time()
             start_time=time.time()
             frames=self.frame_manager.capture_frames()
             if len(frames)==0:
@@ -195,6 +211,7 @@ class Pipeline():
                 landmarks=self.get_closest_landmarks()
                 get_landmark_time=int((time.time()-start_time)*1000)
                 len_landmarks=len(landmarks)
+
 
                 # predict T from motion model
                 start_time=time.time()
@@ -224,11 +241,13 @@ class Pipeline():
             else:
                 c1=no_tracked_landmarks<len_landmarks*0.3
                 # c2=(current_frame.id-self.frame_manager.get_last_keyframe().id)<3
-                c3=np.linalg.norm(self.path[-1][:3,3]-self.T[:3,3])<0.07
-                c4=no_tracked_landmarks<20
+                c3=np.linalg.norm(self.path[-1][:3,3]-self.T[:3,3])>0.07
+                # c4=no_tracked_landmarks<20
 
+            depth_time=0
+            landmarks_time=0
             # creating landmarks
-            if (c1 and c2 and c4) or c3:
+            if (c1 and c2 and c4)or c3:
 
                 # triangulate points
                 start_time=time.time()   
@@ -237,9 +256,12 @@ class Pipeline():
 
                 # adding landmarks
                 start_time=time.time() 
-                pts_3d=self.create_new_landmarks(pts_3d, pts, des, current_frame, current_frame.get_camera_center(),keypoint_idx)
                 self.frame_manager.set_keyframe(current_frame)
+                pts_3d=self.create_new_landmarks(pts_3d, pts, des, current_frame, current_frame.get_camera_center(),keypoint_idx)
+                
+                
                 landmarks_time=int((time.time()-start_time)*1000) 
+                # gc.collect()
             logging.debug(f" length of keyframes {self.frame_manager.get_len_keyframes()}")
 
             previous_frame=current_frame
@@ -248,13 +270,15 @@ class Pipeline():
             #gui update
             start_time=time.time()
             self.visualizer.visualize_pipeline(current_frame)
-            # self.visualizer.visualize_as_point_cloud(self.T)
+            self.visualizer.visualize_as_point_cloud(self.T)
             for frame in frames.values():
                 frame.frame=None  
             gui_time=int((time.time()-start_time)*1000)
             
             
             self.performance_logger.info(f"capture {capture_time}ms | Process {process_time}ms | close lm {get_landmark_time}ms | motion_model {pose_time}ms | tracking {tracking_time}ms | depth {depth_time}ms |creat lm {landmarks_time}ms | gui {gui_time}ms")
+            # self.performance_logger.info(f'wall time {int((time.time()-wall_time)*1000)}ms')
+            # self.performance_logger.info(f"cpu frame {int((time.thread_time()-start_per_frame)*1000)}ms")
             
             # objgraph.show_growth(limit=10)
             
