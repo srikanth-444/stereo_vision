@@ -19,6 +19,7 @@ class Frame():
         self.keypoints=[]
         self.landmarks=[]
         self.descriptors=[]
+        self.covisible = {}
         # self.height, self.width = 480, 752 
         # self.debug_img = np.zeros((self.height,self.width, 3), dtype=np.uint8)
         
@@ -81,6 +82,22 @@ class Frame():
         associated_idx = list(set(range(len(self.image_points))) - self.not_associated_points)
         return self.image_points[associated_idx]
     
+    def update_covisibility(self,):
+        landmarks=self.get_landmarks()
+        counter = {}
+        for lm in landmarks:
+            for kf in lm.observations.keys():
+                if kf == self:
+                    continue
+                counter[kf] = counter.get(kf, 0) + 1
+        for kf, weight in counter.items():
+
+            if weight < 15:
+                continue
+
+            self.covisible[kf] = weight
+            kf.covisible[self] = weight
+    
     def project_landmarks(self, pts_3d, T=None):
 
         ones = np.ones((pts_3d.shape[0], 1))
@@ -121,7 +138,7 @@ class Frame():
             if len(m_list) < 2: continue
             m, n = m_list[0], m_list[1]
 
-            if m.distance < 0.9 * n.distance and m.distance < 40:
+            if m.distance < 0.9* n.distance and m.distance < 40:
                 if m.trainIdx in matched_idx:
                     continue
                 global_matches.append(m)
@@ -156,34 +173,26 @@ class Frame():
         return matched_objects, matched_images, matched_des
     
     def projection_match_merger(self,landmarks):
-        merging_land_ids = defaultdict(set)
+        merging_land = []
         object_points = np.array([lm.position for lm in landmarks])
         landmark_desc = np.array([lm.descriptor for lm in landmarks],dtype=np.uint8)
         projected_points =self.project_landmarks(object_points)
-        final_matches=[]
-        global_matches=[]
         matches = self.camera.feature_extractor.bf.knnMatch(landmark_desc, self.descriptors, k=2)
         for i, m_list in enumerate(matches):
             if len(m_list) < 2: continue
             m, n = m_list[0], m_list[1]
-
-            # 3. Ratio & Distance Thresholds
             if m.distance < 0.7 * n.distance and m.distance < 40:
-                global_matches.append(m)
                 matched_kp_pt = self.image_points[m.trainIdx]
                 proj_pt = projected_points[m.queryIdx]
                 dist_sq = np.sum((matched_kp_pt - proj_pt)**2)
-                if dist_sq < 100: # 10 pixel radius
-                    m.queryIdx = i # landmark index
-                    final_matches.append(m)
-                    if m.trainIdx in self.landmarks_keypoint_association:
-                        existing_landmark= self.landmarks_keypoint_association[m.trainIdx]
-                        merging_land_ids[existing_landmark].add(landmarks[m.queryIdx])
+                if dist_sq < 100:
+                    m.queryIdx = i
+                    if self.landmarks[m.trainIdx]==None:
+                        self.landmarks[m.trainIdx]=landmarks[m.queryIdx]
                     else:
-                        if landmarks[m.queryIdx] not in self.keypoint_landmarks_association:
-                            self.keypoint_landmarks_association[landmarks[m.queryIdx]] = m.trainIdx
-                            self.landmarks_keypoint_association[m.trainIdx]=landmarks[m.queryIdx]
-        return merging_land_ids
+                        merging_land.append([landmarks[m.queryIdx],self.landmarks[m.trainIdx]])
+                    
+        return merging_land
     def plot_points(self,points,color):
         # Draw projected landmarks in red
         for pt in points:

@@ -15,7 +15,7 @@ import logging
 def start_service():
     logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s.%(msecs)03d | %(name)s | %(levelname)-8s | %(message)s',
+    format='%(asctime)s.%(msecs)03d | %(name)s | %(levelname)-s | %(message)s',
     datefmt='%H:%M:%S'
 )
     logging.info("SLAM service started")

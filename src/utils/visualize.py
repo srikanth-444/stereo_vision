@@ -67,9 +67,9 @@ class Visualize:
         cv2.waitKey(1)
 
     def visualize_as_point_cloud(self,T=None):
-        np_points = np.array([lm.position for lm in self.landmark_manager.landmark_map.values()])
+        np_points = np.array([lm.position for lm in self.landmark_manager.landmark_map.values() if not lm.is_bad])
         np_colors = np.zeros((np_points.shape[0], 3))
-        active_mask = np.array([lm.active for lm in self.landmark_manager.landmark_map.values()])
+        active_mask = np.array([lm.active for lm in self.landmark_manager.landmark_map.values() if not lm.is_bad])
         np_colors[active_mask] = [1, 0, 0]
         self.pcd_landmarks.points = o3d.utility.Vector3dVector(np_points)
         self.pcd_landmarks.colors = o3d.utility.Vector3dVector(np_colors)

@@ -70,36 +70,29 @@ class LandmarkManager:
             landmark=self.get_landmark_by_id(id)
             landmark.active=False
             if landmark.get_found_ratio()<0.25 or landmark.tracked<=2:
-                del(self.landmark_map[id])
-                # print(landmark.id)
-                for frame ,idx in landmark.observations.items():
+                landmark.is_bad=True
+                for frame,idx in landmark.observations.items():
                     frame.landmarks[idx]=None
+
 
     def merge_landamrks(self, landmarks):
         if len(landmarks) < 2:
             return
-        landmarks = list(landmarks)
-        
-        ids=[lm.id for lm in landmarks]
-        # print(f"ids{ids}")
-        survivor_id = min(ids)
-        # print(f"survivor {survivor_id}")
-        survivor = self.get_landmark_by_id(survivor_id)
-        for id in ids:
-            if id != survivor_id:
-                # print(id)
-                landmark=self.get_landmark_by_id(id)
-                if landmark is None:
+        survivor = max(landmarks, key=lambda lm: len(lm.observations))
+
+        for landmark in landmarks:
+            if landmark is survivor:
+                continue
+            landmark.is_bad=True
+            for frame, idx in landmark.observations.items():
+                if frame in survivor.observations:
                     continue
-                for frame in landmark.observations.keys():
-                    # print(frame.id)
-                    idx=frame.keypoint_landmarks_association[landmark]
-                    frame.keypoint_landmarks_association[survivor]=idx
-                    frame.landmarks_keypoint_association[idx]=survivor
-                    survivor.observations[frame]=frame.image_points[idx]
-                    survivor.tracked=survivor.tracked+1
-                    del(frame.keypoint_landmarks_association[landmark])
-                del(self.landmark_map[id])
+                survivor.observations[frame] = idx
+                frame.landmarks[idx] = survivor
+                survivor.tracked += 1
+
+                    
+         
 
 
     

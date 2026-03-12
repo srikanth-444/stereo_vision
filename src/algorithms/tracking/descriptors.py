@@ -24,7 +24,7 @@ class DescriptorTracker(Tracker):
         start_time=time.time()
         for lm in landmarks:
             lm.active=False
-            lm.nvisible=lm.nvisible+1
+            # lm.nvisible=lm.nvisible+1
         visibility_addition=(time.time()-start_time)*1000
         self.tracker_logger.debug(f"visibility {visibility_addition}ms |")
         for frame in frames:

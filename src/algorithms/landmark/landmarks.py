@@ -16,6 +16,7 @@ class Landmark:
         self.nvisible=1
         self.tracked=1
         self.is_bad=False
+        
 
     def set_landmark_as_bad(self):
         self.is_bad=True
@@ -28,15 +29,16 @@ class Landmark:
         self.ref_depth=np.linalg.norm(self.position-camera_center)
     
     def is_landmark_visible(self,camera_center,dist_ratio_thresh=2.0, angle_thresh_deg=60):
-        vec_to_cam = camera_center - self.position
+        vec_to_cam = self.position-camera_center
         current_dist = np.linalg.norm(vec_to_cam)
         unit_vec_to_cam = vec_to_cam / current_dist
-
-        if current_dist > self.reference_dist * dist_ratio_thresh or \
-           current_dist < self.reference_dist / dist_ratio_thresh:
+        # print(current_dist,self.ref_depth)
+        if current_dist > self.ref_depth * dist_ratio_thresh or \
+           current_dist < self.ref_depth / dist_ratio_thresh:
             return False
-
+        
         cos_theta = np.dot(unit_vec_to_cam, self.normal_vector)
+        # print(cos_theta)
         if cos_theta < np.cos(np.radians(angle_thresh_deg)):
             return False
         return True
@@ -45,7 +47,7 @@ class Landmark:
         self.tracked=self.tracked+1 
         self.observations[frame]=feature_id
         self.all_descriptors.append(frame.descriptors[feature_id])
-        if len(self.observations)>5:
+        if len(self.observations)%5==0:
             self.update_descriptor()
     
     def strip_landmark(self,):
