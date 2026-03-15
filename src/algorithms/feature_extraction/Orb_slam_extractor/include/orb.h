@@ -22,6 +22,7 @@
 #include <vector>
 #include <list>
 #include <opencv2/opencv.hpp>
+#include "featureExtractor.h"
 
 
 namespace ORB_SLAM3
@@ -40,7 +41,7 @@ public:
     bool bNoMore;
 };
 
-class ORBextractor
+class ORBextractor : public FeatureExtractor
 {
 public:
     

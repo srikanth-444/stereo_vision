@@ -48,15 +48,11 @@ def start_service():
 
     landmark_manager=LandmarkManager()
     frame_manager=FrameManager(camera_map=camera_map)
-
-    
     depth_estimator_config=visual_odometry_config.get('depth_estimator',{})
     tracker_config=visual_odometry_config.get('tracker',{})
     min_num_landmarks=visual_odometry_config.get('min_num_landmarks',100)
-
-    
     tracker=tracker_factory(tracker_config,landmark_manager,camera_map[tracker_config.get('camera_id',0)])
-    
+ 
     if depth_estimator_config.get('type')=='stereo':
         left_camera=camera_map[depth_estimator_config.get('left_camera_id',{})]
         right_camera=camera_map[depth_estimator_config.get('right_camera_id',{})]
@@ -66,7 +62,7 @@ def start_service():
     
     logging.info("Starting SLAM pipeline...")
     pipeline.run()
-    visualize.run()
+    
 
 
 if __name__ == "__main__":

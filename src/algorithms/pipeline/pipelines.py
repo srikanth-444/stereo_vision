@@ -7,6 +7,7 @@ import logging
 import threading
 import objgraph
 import gc
+import cProfile
 
 class Pipeline():
 
@@ -22,7 +23,7 @@ class Pipeline():
         self.current_frame=None
         self.visualizer=visualizer
         self.camera_map=camera_map
-
+        self.pr=cProfile.Profile()
         self.performance_logger=logging.getLogger("Performance")
         
     def process_frame(self, frames):
@@ -175,9 +176,11 @@ class Pipeline():
 
     def run(self,):
         previous_frame = None
+        
         for i in range(0,10000):
             i=i+1
-
+            self.pr=cProfile.Profile()
+            self.pr.enable()
             #capture frames
             start_time=time.time()
             frames=self.frame_manager.capture_frames()
@@ -199,7 +202,6 @@ class Pipeline():
             pose_time=0
             tracking_time=0
             if previous_frame is not None :
-
                 # predict T from motion model
                 start_time=time.time()
                 if len(self.path)>2:
@@ -223,8 +225,7 @@ class Pipeline():
                     no_tracked_landmarks=self.landmark_manager.num_of_active_landmarks()
                     logging.debug(f"no of tracked landmarks{no_tracked_landmarks}")
                     self.T=self.compute_trajectory(rvec, tvec)  
-                    tracking_time= int((time.time()-start_time)*1000)
-            
+                    tracking_time= int((time.time()-start_time)*1000)         
             #key frame conditions
             if previous_frame is None:
                 c1=True
@@ -272,6 +273,8 @@ class Pipeline():
                 frame.frame=None  
             gui_time=int((time.time()-start_time)*1000)
             self.performance_logger.info(f"capture {capture_time}ms | Process {process_time}ms | close lm {get_landmark_time}ms | motion_model {pose_time}ms | tracking {tracking_time}ms | depth {depth_time}ms | keyframe {keyframe_time}ms | creat lm {landmarks_time}ms | gui {gui_time}ms")
+            self.pr.disable()
+            self.pr.print_stats(sort='cumtime')
             
             # objgraph.show_growth(limit=10)
             
