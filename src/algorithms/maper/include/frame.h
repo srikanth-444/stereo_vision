@@ -33,7 +33,7 @@ class Frame{
     Eigen::Matrix4f extrinsic;
 
     //constructor
-    Frame::Frame(int id, const cv::Mat& image, int timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic, FeatureExtractor* featureExtractor);
+    Frame(int id, cv::Mat& image, int timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic, FeatureExtractor* featureExtractor);
 
     //Getters
     std::vector<Eigen::Vector2f> getNotAssociatedPoints() const;
@@ -44,12 +44,13 @@ class Frame{
 
     //Setters
     void setCameraWorldPose(const Eigen::Quaternionf& R, const Eigen::Vector3f& t);
-    void setKeyPoints(std::vector<cv::KeyPoint>& keypoints);
-    void setDescriptors(cv::Mat& descriptors);
+    void addKeyPointsToGrid();
+ 
     
     void updateCovisibility();
     bool projectionMatch(std::vector<Landmark*>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints);
     void projectionMatch(std::vector<Landmark*>landmarks);
+    void extractFeatures();
     
 
     private:
@@ -58,7 +59,7 @@ class Frame{
     float gridElementWidthInv, gridElementHeightInv;
     float minX, minY, maxX, maxY;
 
-    std::vector<int> Frame::GetFeaturesInArea(float x, float y, float r);
+    std::vector<int> GetFeaturesInArea(float x, float y, float r);
     Eigen::MatrixXf projectPoints(Eigen::MatrixXf& objectPoints);
 };
 #endif

@@ -2,7 +2,7 @@
 #include "landmark.h"
 #include "featureExtractor.h"
 
-Frame::Frame(int id, const cv::Mat& image, int timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic,FeatureExtractor* featureExtractor): id(id),image(image),timeStamp(timeStamp), intrinsic(intrinsic), extrinsic(extrinsic), featureExtractor(featureExtractor){}
+Frame::Frame(int id, cv::Mat& image, int timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic,FeatureExtractor* featureExtractor): id(id),image(image),timeStamp(timeStamp), intrinsic(intrinsic), extrinsic(extrinsic), featureExtractor(featureExtractor){}
 
 Eigen::Vector3f Frame::getCameraCenter()const{
     if(cameraCenter.array().isNaN().any()){
@@ -10,11 +10,8 @@ Eigen::Vector3f Frame::getCameraCenter()const{
     }
     return cameraCenter;
 }
-void Frame::setKeyPoints(std::vector<cv::KeyPoint>& keyPoints)
+void Frame::addKeyPointsToGrid()
 {
-    this->keyPoints = keyPoints;
-    landmarks.resize(keyPoints.size(), nullptr);
-
     // Grid parameters
     gridCols = 64;
     gridRows = 48;
@@ -35,9 +32,6 @@ void Frame::setKeyPoints(std::vector<cv::KeyPoint>& keyPoints)
     }
 }
 
-void Frame::setDescriptors(cv::Mat& descriptors){
-    this->descriptors=descriptors.clone();
-}
 std::vector<Eigen::Vector2f> Frame::getNotAssociatedPoints()const{
     std::vector<Eigen::Vector2f> result;
     result.reserve(keyPoints.size());
@@ -156,8 +150,8 @@ std::vector<int> Frame::GetFeaturesInArea(float x, float y, float r)
 Eigen::MatrixXf Frame::projectPoints(Eigen::MatrixXf& objectPoints){
     int N=objectPoints.cols();
     Eigen::MatrixXf imagePoints(N,2);
-    auto pc= Tcw.block<3,4>(0,0) * objectPoints;
-    auto uc= intrinsic*pc;
+    Eigen::MatrixXf pc = Tcw.block<3,4>(0,0) * objectPoints;
+    Eigen::MatrixXf uc= intrinsic*pc;
     uc.row(0).array()/=uc.row(2).array();
     uc.row(1).array()/=uc.row(2).array();
     imagePoints.col(0)=uc.row(0).transpose();
@@ -236,4 +230,11 @@ void Frame::projectionMatch(const std::vector<Landmark*> landmarks){
         }
     }
     
+}
+
+void Frame::extractFeatures(){
+    std::vector<int> lap_area = {0, image.cols};
+    (*featureExtractor)(image, cv::noArray(), keyPoints, descriptors, lap_area);
+    landmarks.resize(keyPoints.size(), nullptr);
+    addKeyPointsToGrid();
 }

@@ -81,6 +81,8 @@ public:
         return mvInvLevelSigma2;
     }
 
+    int match(const cv::Mat& lmdescriptor, const cv::Mat& descriptors, const std::vector<int>& idx);
+
     std::vector<cv::Mat> mvImagePyramid;
 
 protected:

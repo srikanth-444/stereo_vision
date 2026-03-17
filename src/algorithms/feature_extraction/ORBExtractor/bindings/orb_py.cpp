@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 #include "orb.h"
 #include <pybind11/numpy.h>
+#include <featureExtractor.h>
 
 namespace py = pybind11;
 
@@ -57,10 +58,10 @@ py::array_t<float> keypoints_to_numpy(const std::vector<cv::KeyPoint> &kps) {
 }
 
 
-PYBIND11_MODULE(orb_slam_features, m) {
-    
 
-    py::class_<ORB_SLAM3::ORBextractor>(m, "ORBExtractor")
+void bind_orb(py::module_ &m) {
+
+    py::class_<ORB_SLAM3::ORBextractor, FeatureExtractor,std::shared_ptr<ORB_SLAM3::ORBextractor>>(m, "ORBExtractor")
         .def(py::init<int, float, int, int, int>(),
              py::arg("nfeatures") = 1000,
              py::arg("scaleFactor") = 1.2,
@@ -89,11 +90,7 @@ PYBIND11_MODULE(orb_slam_features, m) {
                 img = cv::Mat(height, width, CV_8UC1, buf.ptr);
             else
                 img = cv::Mat(height, width, CV_8UC3, buf.ptr);
-
-            // img = img.clone();  // safe copy
             // std::cout << "[DEBUG] CV type: " << img.type() << ", rows=" << img.rows << ", cols=" << img.cols << std::endl;
-            
-            
             std::vector<cv::KeyPoint> keypoints;
             cv::Mat descriptors;
             std::vector<int> lap_area = {0, img.cols};
@@ -110,11 +107,4 @@ PYBIND11_MODULE(orb_slam_features, m) {
 
             return py::make_tuple(keypoints_np, desc_np);
         });
-
-    // We also need to bind cv::KeyPoint so Python can read the list
-    // py::class_<cv::KeyPoint>(m, "KeyPoint")
-    //     .def_readwrite("pt", &cv::KeyPoint::pt)
-    //     .def_readwrite("angle", &cv::KeyPoint::angle)
-    //     .def_readwrite("response", &cv::KeyPoint::response)
-    //     .def_readwrite("octave", &cv::KeyPoint::octave);
 }

@@ -1193,5 +1193,8 @@ namespace ORB_SLAM3
         }
 
     }
+    int ORBextractor::match(const cv::Mat& lmdescriptor, const cv::Mat& descriptors, const std::vector<int>& idx){
+        return 0;
+    }
 
 } //namespace ORB_SLAM

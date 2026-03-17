@@ -3,24 +3,22 @@
 #include "frame.h"
 #include "landmark.h"
 
+
 class Map{
     public:
     int landmarkCounter=0;
-    int keyFrameCounter=0;
-    std::vector<Landmark*> landmarks;
-    std::vector<Frame*> KeyFrames;
+    int FrameCounter=0;
+    std::vector<std::unique_ptr<Landmark>> landmarks;
+    std::vector<std::shared_ptr<Frame>> keyFrames;
 
-    Map::Map();
-
+    Map();
     void createLandmarks(const Eigen::MatrixXf& objectPoints, Frame* frame, const std::vector<int>&featureIds);
     void removeBadLandmarks(std::vector<Landmark*> landmakrs);
-    void mergeLandmarks();
-
-    void setKeyframe(Frame* frame);
+    void mergeLandmarks(std::unordered_map<Landmark*, Landmark*>& mergers);
+    void setKeyframe(std::shared_ptr<Frame> frame);
     Frame* getLastKeyFrame();
-    Frame* getAgedFrames();
-    std::vector<Frame*>findClosestKeyFrame(const Frame* frame, int N=5);
-
+    Frame* getAgedFrame(int age=2);
+    std::vector<Frame*>getClosestKeyFrames(const Frame* frame, int N=5);
     std::vector<Landmark*>getLocalMap(const Frame* frame);
 };
 #endif

@@ -14,6 +14,7 @@ Landmark::Landmark(int id, const Eigen::Vector3f& point3D, Frame* frame, int fea
 void Landmark::addObservation(Frame* frame, int featureId)
 {
     observations[frame]=featureId;
+    increaseTracked();
 }
 
 void Landmark::setNormal(const Eigen::Vector3f& cameraCenter)

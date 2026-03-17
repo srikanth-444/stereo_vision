@@ -15,8 +15,8 @@ class Landmark{
     Eigen::Vector3f point3D;
     Eigen::Vector3f normal;
     float refDepth;
-    int nVisible;
-    int nTracked;
+    int nVisible=1;
+    int nTracked=0;
     int isBad;
 
     Landmark(int id, const Eigen::Vector3f& Point3D, Frame* frame, int featureId);
