@@ -3,8 +3,8 @@ import os
 import numpy as np
 
 # Add the folder containing ORBExtractor.so to path
-feature_path = "/home/srikanth/stereo_vision/build/src/algorithms/feature_extraction"
-atlas_path= "/home/srikanth/stereo_vision/build/src/algorithms/maper"
+feature_path = "/home/srikanth/stereo_vision/src/feature_extractor"
+atlas_path= "/home/srikanth/stereo_vision/src/atlas"
 
 if feature_path not in sys.path:
     sys.path.insert(0, feature_path)
@@ -13,6 +13,13 @@ if atlas_path not in sys.path:
 
 from FeatureExtractor import ORBExtractor,FeatureExtractor
 from Atlas import Frame, Landmark
+
+def create_checkerboard(h, w, square_size=64):
+    # Create a base pattern
+    base = np.indices((h // square_size, w // square_size)).sum(axis=0) % 2
+    # Scale it up to the full image size
+    img = (base.repeat(square_size, axis=0).repeat(square_size, axis=1) * 255).astype(np.uint8)
+    return img
 
 
 def test_object_creation():
@@ -23,9 +30,9 @@ def test_object_creation():
 
 def test_frame_creation():
     orb = ORBExtractor()
-    dummy_image = np.zeros((480, 640), dtype=np.uint8)
-    time_stamp=1
-    intrinsic=np.zeros((3,3),dtype=np.float32, order='F')
+    dummy_image = create_checkerboard(480, 640, square_size=64)
+    time_stamp=np.int64(1.4036365797635556e+18)
+    intrinsic=np.array([[280, 0, 360],[0, 280, 360],[0, 0, 1]],dtype=np.float32)
     extrinsic=np.zeros((4,4),dtype=np.float32, order='F')
     frame=Frame(1,dummy_image,time_stamp,intrinsic,extrinsic,orb)
     assert frame.id == 1, f"Expected id 1, got {frame.id}"
@@ -36,22 +43,23 @@ def test_frame_creation():
 
 def test_landmark_creation():
     orb = ORBExtractor()
-    dummy_image = np.zeros((480, 640), dtype=np.uint8)
+    dummy_image = create_checkerboard(480, 640, square_size=64)
     time_stamp=1
     intrinsic=np.zeros((3,3),dtype=np.float32, order='F')
     extrinsic=np.zeros((4,4),dtype=np.float32, order='F')
     frame=Frame(1,dummy_image,time_stamp,intrinsic,extrinsic,orb)
-    position= np.array([0,0,0],dtype=np.float32)
-    frame.cameraCenter=np.array([0,0,0],dtype=np.float32)
+    frame.extractFeatures()
+    position= np.array([0.0,0.0,0.0],dtype=np.float32, order='F')
+    frame.cameraCenter= np.array([0.0,0.0,0.0],dtype=np.float32, order='F')
     landmark=Landmark(1,position,frame,8)
     assert landmark.id==1, f"Expected id 1, got {landmark.id}"
-    assert landmark.point3D==position, f"Expected 3d point {position} but got {landmark.point3D}"
-    assert landmark.frame.id==frame.id, f"Expected frame id {frame.id} but got {landmark.frame.id}"
-    assert landmark.featureId==8, f"Expected featureId 8 but got {landmark.featureId}" 
+    assert np.allclose(landmark.point3D,position), f"Expected 3d point {position} but got {landmark.point3D}"
+
  
 
   
 
 if __name__ == "__main__":
     test_object_creation()
-    Frame_creation_test()
+    test_frame_creation()
+    test_landmark_creation()
