@@ -1,8 +1,3 @@
-from .core import *
-from .algorithms import *
-from .sensors import *
-from .config import *
-from .interfaces import *
-from .utils import *
+from .feature_extractor import FeatureExtractor
 
-__all__ = ['core', 'algorithms', 'sensors', 'config', 'interfaces', 'utils']
+__all__=["FeatureExtractor"]

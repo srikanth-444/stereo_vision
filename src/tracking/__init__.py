@@ -1,5 +1,5 @@
 from .optical import OpticalTracker
-from .descriptors import DescriptorTracker
+from .Tracker import DescriptorTracker
 from .tracker import tracker_factory
 
 

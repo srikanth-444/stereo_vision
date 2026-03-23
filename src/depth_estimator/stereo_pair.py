@@ -22,22 +22,19 @@ class Stereo :
         self.r_dist=self.right_camera.distortion
         
         self.P= [
-            self.l_K @ self.l_extrinsic[:3, :],
-            self.r_K @ self.r_extrinsic[:3, :]
+            left_camera.new_intrinsic @ self.l_extrinsic[:3, :],
+            right_camera.new_intrinsic @ self.r_extrinsic[:3, :]
         ]
         self.height, self.width = 480, 752 
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
         self.debug_img = np.zeros((self.height,self.width, 3), dtype=np.uint8)
-
-         # 1. Calculate Relative Transform for Rectification
-        # R_rel = R_r * R_l.T | T_rel = R_r * (t_l - t_r)
         R_l, t_l = self.l_extrinsic[:3, :3], self.l_extrinsic[:3, 3]
         R_r, t_r = self.r_extrinsic[:3, :3], self.r_extrinsic[:3, 3]
         
         R_rel = R_r @ R_l.T
         T_rel = t_r - R_rel @ t_l
 
-        # 2. Compute Rectification Matrices
+
         self.R1, self.R2, self.P1, self.P2, _, _, _ = cv2.stereoRectify(
             self.l_K, self.l_dist, self.r_K, self.r_dist, 
             (self.width, self.height), R_rel, T_rel, 
@@ -47,76 +44,19 @@ class Stereo :
         np.seterr(divide='ignore', invalid='ignore')
     
     def rectify_pts(self, pts, camera='left'):
-        """Helper to rectify keypoints without changing the image."""
+
         pts = np.array(pts, dtype=np.float32).reshape(-1, 1, 2)
         if camera == 'left':
             rect = cv2.undistortPoints(pts, self.l_K, self.l_dist, R=self.R1, P=self.P1)
         else:
             rect = cv2.undistortPoints(pts, self.r_K, self.r_dist, R=self.R2, P=self.P2)
-        return rect.reshape(-1, 2)
-
-    # def stereo_match(self, kps_l, kps_r, des_l, des_r, epipolar_threshold=3.0):
-    #     """
-    #     1. Rectifies keypoints
-    #     2. Matches descriptors
-    #     3. Filters matches based on Y-alignment (Epipolar Constraint)
-    #     """
-    #     # Get raw coordinates
-    #     pts_l_raw = kps_l
-    #     pts_r_raw = kps_r
-
-    #     # Step 1: Rectify keypoints
-    #     rect_l = self.rectify_pts(pts_l_raw, 'left')
-    #     rect_r = self.rectify_pts(pts_r_raw, 'right')
-    #     # self.plot_points(rect_l,(0,0,255))
-    #     # self.plot_points(rect_r,(255,0,0))
-        
-    #     # cv2.imshow("stereo Debug", self.debug_img)
-    #     # cv2.waitKey(0)
-    #     row_dict={}
-    #     final_matches=[]
-    #     unique_index=set()
-    #     for i,pt in enumerate(rect_r):
-    #         round_y=max(0,min(round(pt[1]),self.height))
-    #         try:
-    #             row_dict[round_y].add(i)
-    #         except KeyError:
-    #             row_dict[round_y]=set()
-    #             row_dict[round_y].add(i)
-    #     for i,pt in enumerate(rect_l):
-    #         round_y=max(0,min(round(pt[1]),self.height))
-    #         candidate_indices=[]
-    #         for y in range(round_y-2,round_y+3):
-    #             if y in row_dict:
-    #                 candidate_indices.extend(list(row_dict[y]))
-    #         if len(candidate_indices)==0:
-    #             continue
-    #         candiate_des=des_r[candidate_indices]
-    #         matches=self.bf.knnMatch(des_l[i].reshape(1, -1), candiate_des, k=2)
-    #         if len(matches) == 0 or len(matches[0]) < 2:
-    #             continue
-    #         m, n = matches[0]
-    #         # print(f"matches ratio {m.distance/n.distance} m.distance{m.distance}")
-    #         if m.distance < 0.8 * n.distance and m.distance < 40:
-    #             global_train_idx = candidate_indices[m.trainIdx]
-
-    #             if global_train_idx not in unique_index:
-    #                 unique_index.add(global_train_idx)
-    #                 m.trainIdx=candidate_indices[m.trainIdx]
-    #                 m.queryIdx=i
-    #                 final_matches.append(m) 
-    #     # print(f"stereo matches {len(final_matches)}")
-    #     return final_matches
+        return rect.reshape(-1, 2)    
     
-    def stereo_match(self, kps_l, kps_r, des_l, des_r, epipolar_threshold=3.0):
+    def stereo_match(self, kps_l, kps_r, des_l, des_r, epipolar_threshold=5.0):
         # 1. Rectify all points at once (vectorized)
         rect_l = self.rectify_pts(kps_l, 'left')
         rect_r = self.rectify_pts(kps_r, 'right')
-
-        # 2. Match everything in one batch call (C++ optimized)
-        # k=2 for the ratio test
         raw_matches = self.bf.knnMatch(des_l, des_r, k=2)
-
         final_matches = []
         used_right_indices = set()
 
@@ -127,20 +67,27 @@ class Stereo :
             m, n = m_list
             
             # 3. Apply Lowe's Ratio Test + Absolute distance threshold
-            if m.distance < 0.8 * n.distance and m.distance < 40:
+            if m.distance < 0.7 * n.distance and m.distance < 40:
                 idx_l = m.queryIdx
                 idx_r = m.trainIdx
                 
-                # 4. Epipolar Constraint: Check if Y-coordinates are aligned
-                # After rectification, y_left should equal y_right
+
                 y_diff = abs(rect_l[idx_l][1] - rect_r[idx_r][1])
                 
                 if y_diff < epipolar_threshold:
-                    # 5. Check for horizontal sanity (x_left > x_right for standard stereo)
                     if rect_l[idx_l][0] > rect_r[idx_r][0]:
                         if idx_r not in used_right_indices:
                             final_matches.append(m)
                             used_right_indices.add(idx_r)
+        # self.plot_points(rect_l,(0,0,255))
+        # self.plot_points(rect_r,(255,0,0))
+        # for m in final_matches:
+        #     pt1 = tuple(map(int, rect_l[m.queryIdx]))
+        #     pt2 = tuple(map(int, rect_r[m.trainIdx]))
+        #     cv2.line(self.debug_img, pt1, pt2, (0, 255, 0), 1)
+        
+        # cv2.imshow("stereo Debug", self.debug_img)
+        # cv2.waitKey(0)
                             
         return final_matches
         
@@ -207,8 +154,8 @@ class Stereo :
          # Homogeneous coordinates (N,4)
 
         for pt in pts3d:
-            if pt[2]>=10:
-                pt[2]=10
+            if pt[2]>=15:
+                pt[2]=15
             if pt[2]<=0:
                 pt[2]=0
         ones = np.ones((pts3d.shape[0], 1))

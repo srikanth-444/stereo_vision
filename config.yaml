@@ -67,7 +67,7 @@ pipe_line:
 
     tracker:
       type: "descriptor"
-      reprojection_error: 3.0
+      reprojection_error: 5.0
       iterationsCount: 200
       confidence: 0.01
       FB_MAX_DIST: 1.0

@@ -1193,5 +1193,44 @@ namespace ORB_SLAM3
         }
 
     }
+    int ORBextractor::match(const cv::Mat& lmDescriptor, const cv::Mat& descriptors, const std::vector<int>& idx, float mnratio){
+        if (lmDescriptor.empty() || descriptors.empty() || idx.empty())return -1;
+
+        int bestIdx = -1;
+        int bestDist = INT_MAX;
+        int secondBestDist = INT_MAX;
+
+        for (int i : idx)
+        {
+            if (i < 0 || i >= descriptors.rows)
+                continue;
+
+            const cv::Mat& d = descriptors.row(i);
+
+            int dist = cv::norm(lmDescriptor, d, cv::NORM_HAMMING);
+
+            if (dist < bestDist)
+            {
+                secondBestDist = bestDist;
+                bestDist = dist;
+                bestIdx = i;
+            }
+            else if (dist < secondBestDist)
+            {
+                secondBestDist = dist;
+            }
+        }
+
+        // --- Ratio Test ---
+        const float ratio = mnratio;  // typical value (0.7–0.8 for ORB)
+
+        if (bestIdx == -1 || secondBestDist == INT_MAX)
+            return -1;
+
+        if (static_cast<float>(bestDist) > ratio * static_cast<float>(secondBestDist))
+            return -1;
+
+        return bestIdx;
+    }
 
 } //namespace ORB_SLAM

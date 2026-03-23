@@ -1,23 +1,12 @@
-from abc import ABC, abstractmethod
 
-class Tracker(ABC):
-
-    def __init__(self):
-        pass
-
-    @abstractmethod
-    def track_landmarks(self, previous_frame, current_frame, landmarks):
-        pass
-
-def tracker_factory(config_load,landmark_manager,camera):
+def tracker_factory(config_load,optimizer,camera):
     reprojection_error=config_load.get('reprojection_error',{})
     confidence =config_load.get('confidence',{})
     iterationsCount=config_load.get('iterationsCount',{})
-    landmark_manager=landmark_manager
     camera=camera
     if config_load.get('type',{})=='descriptor':
-        from .descriptors import DescriptorTracker
-        return DescriptorTracker(reprojection_error,confidence,iterationsCount,landmark_manager,camera)
+        from .Tracker import DescriptorTracker
+        return DescriptorTracker(reprojection_error,confidence,iterationsCount,camera,optimizer)
     if config_load.get('type',{})=='optical':
         from .optical import OpticalTracker
         FB_MAX_DIST=config_load.get('FB_MAX_DIST')

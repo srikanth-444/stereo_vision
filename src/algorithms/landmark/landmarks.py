@@ -6,10 +6,9 @@ class Landmark:
         self.position=position
         self.descriptor=frame.descriptors[feature_id]
         self.id=id
-        self.frame=frame
         self.active=True
         self.observations={}
-        self.observations[self.frame]=feature_id
+        self.observations[frame]=feature_id
         self.confidence=None
         self.all_descriptors=[self.descriptor]
         self.normal_vector = None

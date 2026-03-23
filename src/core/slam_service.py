@@ -1,20 +1,22 @@
 
 from ..config import load_config
-from ..algorithms.feature_extraction import feature_extractor_factory
-from ..algorithms.landmark import LandmarkManager
-from ..algorithms.tracking import tracker_factory
-from ..algorithms.pipeline import pipeline_factory
-from ..algorithms.depth_estimator import Stereo
+from ..feature_extractor import feature_extractor_factory
+from ..atlas.Atlas import Map
+from ..tracking import tracker_factory
+from ..pipeline import pipeline_factory
+from ..depth_estimator import Stereo
 from ..sensors import Camera
 from ..interfaces import interface_factory
-from .. utils.visualize import Visualize
-from ..algorithms.frame import FrameManager
+from ..visualize import Visualize
+from ..optimizer.Optimizer import Optimizer
+from ..motion_model.motion_model import ConstantVelocity 
+
 import logging
 
 
 def start_service():
     logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s.%(msecs)03d | %(name)s | %(levelname)-s | %(message)s',
     datefmt='%H:%M:%S'
 )
@@ -43,30 +45,24 @@ def start_service():
         camera_map[camera_config.get('ID',{})]=camera
         logging.info(f"Initialized camera with ID {camera_config.get('ID',{})}")    
 
-    
+    motion_model=ConstantVelocity()
     logging.info("Initializing pipeline...")
-
-    landmark_manager=LandmarkManager()
-    frame_manager=FrameManager(camera_map=camera_map)
-
-    
+    atlas=Map()
     depth_estimator_config=visual_odometry_config.get('depth_estimator',{})
     tracker_config=visual_odometry_config.get('tracker',{})
-    min_num_landmarks=visual_odometry_config.get('min_num_landmarks',100)
-
-    
-    tracker=tracker_factory(tracker_config,landmark_manager,camera_map[tracker_config.get('camera_id',0)])
+    optimizer=Optimizer(False)
+    tracker=tracker_factory(tracker_config,optimizer,camera_map[tracker_config.get('camera_id',0)])
     
     if depth_estimator_config.get('type')=='stereo':
         left_camera=camera_map[depth_estimator_config.get('left_camera_id',{})]
         right_camera=camera_map[depth_estimator_config.get('right_camera_id',{})]
         depth_estimator=Stereo(left_camera,right_camera)
-    visualize=Visualize(frame_manager, landmark_manager)
-    pipeline=pipeline_factory(landmark_manager,tracker,frame_manager,depth_estimator,min_num_landmarks,visualize,camera_map)
+    visualizer=Visualize(atlas)
+    pipeline=pipeline_factory(atlas,tracker,depth_estimator,motion_model,visualizer,camera_map)
     
     logging.info("Starting SLAM pipeline...")
     pipeline.run()
-    visualize.run()
+    
 
 
 if __name__ == "__main__":

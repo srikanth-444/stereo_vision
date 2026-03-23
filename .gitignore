@@ -7,6 +7,9 @@ venv/
 
 # Videos, large outputs
 *.mp4
+*.png
+*.ply
+*.gz
 
 # VSCode settings
 .vscode/

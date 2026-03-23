@@ -3,24 +3,33 @@ import numpy as np
 import open3d as o3d
 import time
 
+
 class Visualize:
-    def __init__(self, framemanager, landmarkmanager) -> None:
-        self.frame_manager=framemanager
-        self.landmark_manager=landmarkmanager
+    def __init__(self, atlas) -> None:
+        self.atlas=atlas
         self.prev_time = time.perf_counter()
         self.fps = 0.0
         self.fps_alpha = 0.1   # smoothing factor
         self.first_view = True
         self.vis = o3d.visualization.Visualizer()
-        self.vis.create_window(window_name="Landmarks + Trajectory + Axes")
-
+        self.vis.create_window(window_name="Map + Trajectory",
+                                width=640,
+                                height=480,
+                                left=100,
+                                top=100)
+        self.max_points = 1000000
+        self.points = np.zeros((self.max_points, 3))
+        self.colors = np.zeros((self.max_points, 3))
+        self.ptr = 0
         self.pcd_landmarks = o3d.geometry.PointCloud()
+        self.active_landmarks = o3d.geometry.PointCloud()
         self.traj_line_set = o3d.geometry.LineSet()
         self.axes = o3d.geometry.LineSet()
 
         self.vis.add_geometry(self.pcd_landmarks)
         self.vis.add_geometry(self.traj_line_set)
         self.vis.add_geometry(self.axes)
+        self.vis.add_geometry(self.active_landmarks)
         self.landmark_points = []
         self.traj_points=[]
         self.traj_lines=[]
@@ -30,6 +39,12 @@ class Visualize:
         self.R_transform = np.array([[0,1,0,0],[1,0,0,0],[0,0,-1,0],[0,0,0,1]])
         render_option = self.vis.get_render_option()
         render_option.point_size = 2.0
+    
+    def add_points(self, new_pts, new_colors):
+        n = new_pts.shape[0]
+        self.points[self.ptr:self.ptr+n] = new_pts
+        self.colors[self.ptr:self.ptr+n] = new_colors
+        self.ptr += n
     
     def visualize_pipeline(self, frame)->None:
 
@@ -42,16 +57,26 @@ class Visualize:
             inst_fps = 1.0 / dt
             self.fps = (1 - self.fps_alpha) * self.fps + self.fps_alpha * inst_fps
 
-        if len(frame.frame.shape) == 2:
-            display_img = cv2.cvtColor(frame.frame, cv2.COLOR_GRAY2BGR)
+        if len(frame.image.shape) == 2:
+            display_img = cv2.cvtColor(frame.image, cv2.COLOR_GRAY2BGR)
         else:
-            display_img = frame.frame.copy() # Keep original if already color
-        image_points=frame.get_tracked_points()
+            display_img = frame.image.copy() # Keep original if already color
+        image_points=frame.getTrackedPoints()
+        # untracked_points=frame.getNotAssociatedPoints()
+        # projected_points=frame.projectedPoints
 
         for pt in image_points:
             x=int(pt[0])
             y=int(pt[1])
             cv2.circle(display_img, (x,y), 2, (0,255,0), -1)
+        # for pt in untracked_points:
+        #     x=int(pt[0])
+        #     y=int(pt[1])
+        #     cv2.circle(display_img, (x,y), 2, (0,0,255), -1)
+        # for pt in projected_points:
+        #     x=int(pt[0])
+        #     y=int(pt[1])
+        #     cv2.circle(display_img, (x,y), 2, (255,0,0), -1)
             # --- Draw FPS ---
         cv2.putText(
             display_img,
@@ -67,14 +92,21 @@ class Visualize:
         cv2.waitKey(1)
 
     def visualize_as_point_cloud(self,T=None):
-        np_points = np.array([lm.position for lm in self.landmark_manager.landmark_map.values() if not lm.is_bad])
-        np_colors = np.zeros((np_points.shape[0], 3))
-        active_mask = np.array([lm.active for lm in self.landmark_manager.landmark_map.values() if not lm.is_bad])
-        np_colors[active_mask] = [1, 0, 0]
-        self.pcd_landmarks.points = o3d.utility.Vector3dVector(np_points)
-        self.pcd_landmarks.colors = o3d.utility.Vector3dVector(np_colors)
+        agedFrame=self.atlas.getAgedFrame(2)
+        if agedFrame is not None:
+            aged_points = np.array([lm.point3D for lm in agedFrame.getLandmarks()])
+            aged_colors = np.zeros((aged_points.shape[0], 3))  # black RGB
+            self.add_points(aged_points,aged_colors)
+        self.pcd_landmarks.points = o3d.utility.Vector3dVector(self.points[:self.ptr])
+        self.pcd_landmarks.colors = o3d.utility.Vector3dVector(self.colors[:self.ptr])
+        active_points = np.array([lm.point3D for lm in self.atlas.getLastKeyFrame().getLandmarks() ])
+        active_colors = np.tile([1.0, 0.0, 0.0], (active_points.shape[0], 1))  # red RGB
+        self.active_landmarks.points = o3d.utility.Vector3dVector(active_points)
+        self.active_landmarks.colors=o3d.utility.Vector3dVector(active_colors)
         self.pcd_landmarks.transform(self.R_transform)
+        self.active_landmarks.transform(self.R_transform)
         self.vis.update_geometry(self.pcd_landmarks)
+        self.vis.update_geometry(self.active_landmarks)
 
         if T is not None:
             pose = T[:3, 3]
