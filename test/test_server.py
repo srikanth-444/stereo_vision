@@ -101,7 +101,9 @@ def test_index_contains_dashboard_title(test_client):
 def test_index_contains_socketio_script(test_client):
     """The dashboard must include a Socket.IO client script tag."""
     resp = test_client.get("/")
-    assert b"socket.io" in resp.data
+    html = resp.data.decode("utf-8")
+    # Verify the Socket.IO CDN script tag is present in the page.
+    assert html.find("socket.io.min.js") != -1  # noqa: S603
 
 
 # ---------------------------------------------------------------------------
