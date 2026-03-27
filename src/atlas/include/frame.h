@@ -24,11 +24,12 @@ class Frame : public std::enable_shared_from_this<Frame>{
     std::vector<std::weak_ptr<Landmark>> landmarks;
     std::vector<int> notAssociatedIndices;
     std::unordered_map<std::weak_ptr<Frame>, int, WeakPtrHash, WeakPtrEqual> covisibility;
-    std::unordered_map<std::shared_ptr<Landmark>, std::shared_ptr<Landmark>> mergers; 
+    std::unordered_map<std::shared_ptr<Landmark>, std::vector<std::shared_ptr<Landmark>>> mergers; 
 
     Eigen::Quaternionf q=Eigen::Quaternionf::Identity();
     Eigen::Vector3f t= Eigen::Vector3f::Constant(std::nanf(""));
     Eigen::Vector3f cameraCenter = Eigen::Vector3f::Constant(std::nanf("")); 
+    Eigen::Vector3f cameraNormal = Eigen::Vector3f::Constant(std::nanf("")); 
     Eigen::Matrix4f Tcw=Eigen::Matrix4f::Identity(); 
     Eigen::Matrix3f intrinsic;
     Eigen::Matrix4f extrinsic;
@@ -55,7 +56,8 @@ class Frame : public std::enable_shared_from_this<Frame>{
     void projectionMatch(std::vector<std::shared_ptr<Landmark>>landmarks);
     void match(std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints);
     void extractFeatures();
-    std::vector<std::shared_ptr<Landmark>>getVisibleLandamrks(std::vector<std::shared_ptr<Landmark>>& landmarks);
+    std::vector<std::shared_ptr<Landmark>>getVisibleLandmarks(std::vector<std::shared_ptr<Landmark>>&landmarks);
+
     
 
     private:

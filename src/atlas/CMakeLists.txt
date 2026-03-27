@@ -2,6 +2,7 @@ target_sources(slam PRIVATE
 ${CMAKE_CURRENT_SOURCE_DIR}/src/frame.cpp
 ${CMAKE_CURRENT_SOURCE_DIR}/src/landmark.cpp
 ${CMAKE_CURRENT_SOURCE_DIR}/src/map.cpp
+${CMAKE_CURRENT_SOURCE_DIR}/src/atlas.cpp
 )
 
 target_include_directories(slam PUBLIC
@@ -9,7 +10,7 @@ target_include_directories(slam PUBLIC
 )
 
 pybind11_add_module(Atlas SHARED
-${CMAKE_CURRENT_SOURCE_DIR}/bindings/atlas.cpp
+${CMAKE_CURRENT_SOURCE_DIR}/bindings/atlas_py.cpp
 ${CMAKE_CURRENT_SOURCE_DIR}/bindings/frame_py.cpp
 ${CMAKE_CURRENT_SOURCE_DIR}/bindings/landmark_py.cpp
 ${CMAKE_CURRENT_SOURCE_DIR}/bindings/map_py.cpp

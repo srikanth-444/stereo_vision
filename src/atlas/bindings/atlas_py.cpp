@@ -1,5 +1,5 @@
 #include <pybind11/pybind11.h>
-
+#include "atlas.h"
 
 namespace py = pybind11;
 
@@ -13,4 +13,8 @@ PYBIND11_MODULE(Atlas, m) {
     bind_frame(m);
     bind_landmark(m);
     bind_map(m);
+    py::class_<Atlas, std::shared_ptr<Atlas>>(m,"Atlas")
+        .def(py::init<>())
+        .def("initiateNewMap",&Atlas::initiateNewMap)
+        .def("getActiveMap",&Atlas::getActiveMap);
 }

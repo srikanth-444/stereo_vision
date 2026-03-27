@@ -5,7 +5,17 @@
 
 
 Landmark::Landmark(int id, const Eigen::Vector3f point3D, std::shared_ptr<Frame> frame, int featureId): id(id),point3D(point3D)
-{
+{   
+
+    if (!point3D.allFinite()) {
+        throw std::invalid_argument("Landmark: point3D contains invalid values (NaN or Inf)");
+    }
+    if (!frame) {
+        throw std::invalid_argument("Landmark: frame pointer is null");
+    }
+    if (featureId < 0) {
+        throw std::invalid_argument("Landmark: featureId must be non-negative");
+    }
    
     addObservation(frame, featureId);
     
@@ -20,12 +30,24 @@ void Landmark::addObservation(std::weak_ptr<Frame> frame, int featureId)
     setNormal(f->cameraCenter);
     setReferenceDepth(f->cameraCenter);
 }
+bool Landmark::hasObservation(const std::weak_ptr<Frame>& frame, int featureId) const
+{
+    for (const auto& [f, fid] : observations)
+    {
+        if (!f.expired() && f.lock() == frame.lock() && fid == featureId)
+            return true;
+    }
+    return false;
+}
 
 void Landmark::setNormal(const Eigen::Vector3f& cameraCenter)
 {
     Eigen::Vector3f view_dir = point3D - cameraCenter;
     view_dir.normalize();
-
+    if (normal.array().isNaN().any()){
+        normal=view_dir;
+        return;
+    }
     normal += view_dir;
     normal.normalize();
 }
@@ -34,14 +56,15 @@ void Landmark::setReferenceDepth(const Eigen::Vector3f& cameraCenter)
     refDepth = (point3D-cameraCenter).norm();
 }
 
-bool Landmark::isVisible(const Eigen::Vector3f& cameraCenter, float distThresh, float angleThresh)
+bool Landmark::isVisible(const Eigen::Vector3f& cameraCenter,const Eigen::Vector3f& cameraNormal, float distThresh, float angleThresh)
 {   
     Eigen::Vector3f currentVector=point3D-cameraCenter;
     float currentDist = currentVector.norm();
-    currentVector.normalize();
+    // std::cout<<"distance gating: "<<(currentDist>refDepth*distThresh)<<", "<<(currentDist<refDepth/distThresh)<<std::endl;
     if (currentDist>refDepth*distThresh || currentDist<refDepth/distThresh ) return false;
     float cosThresh = std::cos(angleThresh * M_PI / 180.0f);
-    float cosAngle= currentVector.dot(normal);
+    float cosAngle= cameraNormal.dot(normal);
+    // std::cout<<"angle gatting: "<<(cosAngle<cosThresh)<<", "<<cosAngle<<", "<<cosThresh<<std::endl;
     if (cosAngle<cosThresh) return false;
     return true;
 }
