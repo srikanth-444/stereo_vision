@@ -1,8 +1,8 @@
 
 from ..config import load_config
 from ..feature_extractor import feature_extractor_factory
-from ..atlas.Atlas import Map
-from ..tracking import tracker_factory
+from ..atlas.Atlas import Atlas
+from ..tracking import Tracker
 from ..pipeline import pipeline_factory
 from ..depth_estimator import Stereo
 from ..sensors import Camera
@@ -47,11 +47,11 @@ def start_service():
 
     motion_model=ConstantVelocity()
     logging.info("Initializing pipeline...")
-    atlas=Map()
+    atlas=Atlas()
     depth_estimator_config=visual_odometry_config.get('depth_estimator',{})
     tracker_config=visual_odometry_config.get('tracker',{})
-    optimizer=Optimizer(False)
-    tracker=tracker_factory(tracker_config,optimizer,camera_map[tracker_config.get('camera_id',0)])
+    optimizer=Optimizer(True)
+    tracker=Tracker(tracker_config,optimizer,camera_map[tracker_config.get('camera_id',0)],atlas)
     
     if depth_estimator_config.get('type')=='stereo':
         left_camera=camera_map[depth_estimator_config.get('left_camera_id',{})]

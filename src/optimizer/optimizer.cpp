@@ -25,6 +25,9 @@ void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
     auto landmarks = frame->getLandmarks();
     auto imagePoints = frame->getTrackedPoints();
 
+    std::vector<g2o::EdgeSE3ProjectXYZOnlyPose*> edges;
+    edges.reserve(landmarks.size());
+
     for (size_t i = 0; i < landmarks.size(); ++i) {
 
         auto edge = new g2o::EdgeSE3ProjectXYZOnlyPose();
@@ -48,11 +51,25 @@ void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
         rk->setDelta(std::sqrt(5.991)); // Chi-square threshold for 2 degrees of freedom
 
         optimizer.addEdge(edge);
+        edges.push_back(edge);
     }
 
     // 4. Run Optimization
     optimizer.initializeOptimization();
-    optimizer.optimize(10);
+    const int max_iterations = 10; 
+    for(int iter = 0; iter < max_iterations; ++iter){
+        optimizer.optimize(1); // one iteration at a time
+
+        // Remove high-reprojection-error edges
+        for(auto edge : edges){
+            if(!edge->level()) { // only consider active edges
+                double error = edge->chi2();
+                if(error > 5.991){ // same chi2 threshold
+                    edge->setLevel(1); // deactivate for next iteration
+                }
+            }
+        }
+    }
 
     Eigen::Matrix4f Tcw=(pose->estimate().to_homogeneous_matrix().cast<float>()).eval();
     // 5. Update Frame Pose
@@ -64,9 +81,3 @@ void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
     q_.normalize();
     frame->setCameraWorldPose(q_,t_);
 }
-
-
-
-
-
-

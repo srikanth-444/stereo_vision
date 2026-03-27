@@ -4,6 +4,7 @@
 Map::Map(){}
 
 std::vector<std::shared_ptr<Landmark>> Map::createLandmarks(Eigen::MatrixXf& objectPoints, std::shared_ptr<Frame> frame, const std::vector<int>&featureIds){
+    
     std::vector<std::shared_ptr<Landmark>> landmarks;
     auto R=frame->q.toRotationMatrix();
     for(int i = 0; i < objectPoints.rows(); i++){
@@ -30,22 +31,39 @@ void Map::removeBadLandmarks(std::vector<std::shared_ptr<Landmark>> landmarks){
     }
 }
 
-void Map::mergeLandmarks(std::unordered_map<std::shared_ptr<Landmark>, std::shared_ptr<Landmark>>& mergers){
-    for(auto [lm1,lm2]:mergers){
-        if (lm1==nullptr ||lm2==nullptr){
-            throw std::invalid_argument("Null pointers in merger"+std::to_string(lm1->id)+std::to_string(lm2->id));
+void Map::mergeLandmarks(std::unordered_map<std::shared_ptr<Landmark>, std::vector<std::shared_ptr<Landmark>>>& mergers)
+{
+    for (auto& [lm1, duplicates] : mergers)
+    {
+        if (!lm1 || lm1->isBad) continue;
+
+        for (auto& lm2 : duplicates)
+        {
+            if (!lm2 || lm2->isBad) continue;
+
+            // Choose survivor
+            auto survivorLm = (lm1->observations.size() > lm2->observations.size()) ? lm1 : lm2;
+            auto duplicateLm = (lm1 == survivorLm) ? lm2 : lm1;
+
+            const auto& observations = duplicateLm->observations;
+
+            for (const auto& [frame, featureId] : observations)
+            {
+                auto f = frame.lock();
+                if (!f) continue;
+
+                // Avoid duplicate observations
+                if (!survivorLm->hasObservation(frame, featureId))
+                {
+                    survivorLm->addObservation(frame, featureId);
+                }
+
+                f->landmarks[featureId] = survivorLm;
+            }
+
+            duplicateLm->observations.clear();
+            duplicateLm->isBad = true;
         }
-        if (lm1->isBad || lm2->isBad)continue;
-        auto surviourLm= (lm1->observations.size() > lm2->observations.size()) ? lm1 : lm2;
-        auto duplicateLm=(lm1==surviourLm)? lm2:lm1;
-        // std::cout<<surviourLm->id<<std::endl;
-        auto observations = duplicateLm->observations;
-        for (auto [frame, featureId] : observations) {
-            surviourLm->addObservation(frame, featureId);
-            frame.lock()->landmarks[featureId] = surviourLm;
-        }
-        duplicateLm->observations.clear();
-        duplicateLm->isBad = true;
     }
 }
 
@@ -82,23 +100,27 @@ std::vector<std::shared_ptr<Frame>> Map::getClosestKeyFrames(const std::shared_p
     }
     return result;
 }
-std::vector<std::shared_ptr<Landmark>> Map::getLocalMap(const std::shared_ptr<Frame> frame){
+std::vector<std::shared_ptr<Landmark>> Map::getLocalMap(const std::shared_ptr<Frame> frame) {
+    std::unordered_set<int> uniqueIds;
     std::vector<std::shared_ptr<Landmark>> landmarks;
-    auto frames= getClosestKeyFrames(frame);
-    auto lm =frame->getLandmarks();
-        for(auto l:lm){
-            // std::cout<<"frame id: "<<frame->id<<" landmark id: "<<l->id<<" decriptor: "<<l->descriptor.rows<<"x"<<l->descriptor.cols<<std::endl;
+
+    // Current frame landmarks
+    for (auto& lm : frame->getLandmarks()) {
+        if (uniqueIds.insert(lm->id).second) { // true if inserted (not duplicate)
+            landmarks.push_back(lm);
         }
-        landmarks.insert(landmarks.end(),lm.begin(), lm.end());
-    if(frames.empty())return landmarks;
-    // std::cout<<"localMap frames: "<<frames.size()<<std::endl;
-    for(int i=0; i<frames.size(); i++){
-        auto lm= frames[i]->getLandmarks();
-        for(auto l:lm){
-            // std::cout<<"frame id: "<<frame->id<<" landmark id: "<<l->id<<" decriptor: "<<l->descriptor.rows<<"x"<<l->descriptor.cols<<std::endl;
-        }
-        landmarks.insert(landmarks.end(),lm.begin(), lm.end());
     }
+
+    // Keyframe landmarks
+    auto frames = getClosestKeyFrames(frame);
+    for (auto& f : frames) {
+        for (auto& lm : f->getLandmarks()) {
+            if (uniqueIds.insert(lm->id).second) {
+                landmarks.push_back(lm);
+            }
+        }
+    }
+
     return landmarks;
 }
 int Map::getLengthKeyFrame(){

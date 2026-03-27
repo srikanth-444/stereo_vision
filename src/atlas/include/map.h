@@ -2,6 +2,7 @@
 #define MAP_H
 #include "frame.h"
 #include "landmark.h"
+#include <unordered_set>
 
 
 class Map{
@@ -14,7 +15,7 @@ class Map{
     Map();
     std::vector<std::shared_ptr<Landmark>> createLandmarks(Eigen::MatrixXf& objectPoints, std::shared_ptr<Frame> frame, const std::vector<int>&featureIds);
     void removeBadLandmarks(std::vector<std::shared_ptr<Landmark>> landmakrs);
-    void mergeLandmarks(std::unordered_map<std::shared_ptr<Landmark>, std::shared_ptr<Landmark>>& mergers);
+    void mergeLandmarks(std::unordered_map<std::shared_ptr<Landmark>, std::vector<std::shared_ptr<Landmark>>>& mergers);
     void setKeyframe(std::shared_ptr<Frame> frame);
     std::shared_ptr<Frame> getLastKeyFrame();
     std::shared_ptr<Frame> getAgedFrame(int age=2);

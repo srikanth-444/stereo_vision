@@ -60,6 +60,7 @@ void bind_frame(py::module_ &m) {
         .def_readwrite("intrinsic", &Frame::intrinsic)
         .def_readwrite("extrinsic", &Frame::extrinsic)
         .def_readwrite("cameraCenter", &Frame::cameraCenter)
+        .def_readwrite("cameraNormal",&Frame::cameraNormal)
         .def_property_readonly("worldPose",[](Frame &f){
             Eigen::Vector4f v = f.q.coeffs();
             return py::make_tuple(v,f.t);})
@@ -79,7 +80,7 @@ void bind_frame(py::module_ &m) {
             Eigen::Quaternionf q(r);
             return f.setCameraWorldPose(q,t);
         })
-        .def("getVisibleLandamrks",&Frame::getVisibleLandamrks)
+        .def("getVisibleLandmarks",&Frame::getVisibleLandmarks)
         .def("match",[](Frame &f, std::vector<std::shared_ptr<Landmark>> landmarks){
                 std::vector<cv::Point3f> objectPoints;
                 std::vector<cv::Point2f> imagePoints;

@@ -122,7 +122,8 @@ void Frame::setCameraWorldPose(Eigen::Quaternionf q,Eigen::Vector3f t){
 
     Eigen::Matrix3f Rwc = Twc.block<3,3>(0,0);
     Eigen::Vector3f twc = Twc.block<3,1>(0,3);
-
+    cameraNormal=Rwc*Eigen::Vector3f(0,0,1);
+    cameraNormal.normalize();
     Eigen::Matrix3f Rcw = Rwc.transpose();
     Eigen::Vector3f tcw = -Rcw * twc;
 
@@ -174,24 +175,12 @@ bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmark
     // std::cout<<"entered the main function"<<std::endl;
     
     Eigen::MatrixXf objectPoints(4,landmarks.size());
-    cv::Mat lmDescriptors(landmarks.size(), descriptors.cols, descriptors.type());
-    for(int i=0; i<landmarks.size();i++){
-        objectPoints(0,i)=landmarks[i]->point3D[0];
-        objectPoints(1,i)=landmarks[i]->point3D[1];
-        objectPoints(2,i)=landmarks[i]->point3D[2];
-        objectPoints(3,i)=1.0f;
-        landmarks[i]->descriptor.copyTo(lmDescriptors.row(i));
-    }
-
-    projectedPoints=projectPoints(objectPoints);
-
-    for(int i = 0; i < projectedPoints.rows(); i++)
+    for(int i=0; i<landmarks.size();i++)
     {
-        float u = projectedPoints(i,0);
-        float v = projectedPoints(i,1);
-
-        auto idx=GetFeaturesInArea(u,v,50);
-        int id=featureExtractor->match(lmDescriptors.row(i),descriptors,idx,0.9);
+        float u = landmarks[i]->projectedpoint(0);
+        float v = landmarks[i]->projectedpoint(1);
+        auto idx=GetFeaturesInArea(u,v,10);
+        int id=featureExtractor->match(landmarks[i]->descriptor,descriptors,idx,0.9);
         if(id==-1) continue;
         if(!this->landmarks[id].lock()){
             std::weak_ptr<Frame> wthis = shared_from_this();
@@ -211,39 +200,59 @@ bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmark
     
     return true;
 }
-std::vector<std::shared_ptr<Landmark>>Frame::getVisibleLandamrks(std::vector<std::shared_ptr<Landmark>>& landmarks){
+std::vector<std::shared_ptr<Landmark>>Frame::getVisibleLandmarks(std::vector<std::shared_ptr<Landmark>>& landmarks)
+{
     std::vector<std::shared_ptr<Landmark>> newLandmarks;
     newLandmarks.reserve(landmarks.size());
-    for(auto lm:landmarks){
-        if(lm->isVisible(this->cameraCenter)){
-            lm->increaseVisible();
-            newLandmarks.emplace_back(lm);
-        }
+
+    Eigen::Matrix3f Rcw = (Tcw.block<3,3>(0,0)).eval();
+    Eigen::Vector3f tcw = (Tcw.block<3,1>(0,3)).eval();
+
+    for (const auto& lm : landmarks)
+    {
+        // 1. Viewing angle check
+        if (!lm->isVisible(this->cameraCenter, this->cameraNormal))
+            continue;
+
+        // 2. Transform to camera frame
+        Eigen::Vector3f p = Rcw * lm->point3D + tcw;
+
+        // 3. Depth check
+        if (p[2] <= 0)
+            continue;
+
+        // 4. Projection
+        Eigen::Vector3f proj = this->intrinsic * p;
+        proj /= proj[2];
+
+        float u = proj[0];
+        float v = proj[1];
+
+        // 5. Image bounds check
+        if (u < 0 || u >= image.cols || v < 0 || v >= image.rows)
+            continue;
+
+        // 6. Store result
+        lm->projectedpoint = proj.head<2>();
+        lm->increaseVisible();
+        newLandmarks.emplace_back(lm);
     }
-    nVisible=newLandmarks.size();
+
+    nVisible = newLandmarks.size();
     return newLandmarks;
 }
 
 void Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>> landmarks){
     Eigen::MatrixXf objectPoints(4,landmarks.size());
-    cv::Mat lmDescriptors(landmarks.size(), descriptors.cols, descriptors.type());
+
     
     for(int i=0; i<landmarks.size();i++){
-        objectPoints(0,i)=landmarks[i]->point3D[0];
-        objectPoints(1,i)=landmarks[i]->point3D[1];
-        objectPoints(2,i)=landmarks[i]->point3D[2];
-        objectPoints(3,i)=1.0f;
-        landmarks[i]->descriptor.copyTo(lmDescriptors.row(i));
-    }
-    Eigen::MatrixXf projectedPoints=projectPoints(objectPoints);
-
-    for(int i = 0; i < projectedPoints.rows(); i++)
-    {
-        float u = projectedPoints(i,0);
-        float v = projectedPoints(i,1);
+    
+        float u = landmarks[i]->projectedpoint(0);
+        float v = landmarks[i]->projectedpoint(1);
 
         auto idx=GetFeaturesInArea(u,v,50);
-        int id=featureExtractor->match(lmDescriptors.row(i),descriptors,idx,0.9);
+        int id=featureExtractor->match(landmarks[i]->descriptor,descriptors,idx,0.9);
         if(id==-1) continue;
         if(!this->landmarks[id].lock()){
             std::weak_ptr<Frame> wthis = shared_from_this();
@@ -257,21 +266,20 @@ void Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>> landmar
         }
         else{
             if (this->landmarks[id].lock() && this->landmarks[id].lock() ==landmarks[i]) continue;
-            mergers[this->landmarks[id].lock()]=landmarks[i];
+            mergers[this->landmarks[id].lock()].push_back(landmarks[i]);
             
         }
     }
     
 }
 void Frame::match(const std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints){
-    cv::Mat lmDescriptors(landmarks.size(), descriptors.cols, descriptors.type());
-    // std::cout<<"created lmDescriptor"<<std::endl;
+
     std::vector<int> idx;
     idx.resize(descriptors.rows);
     std::iota(idx.begin(), idx.end(),0);
     for(int i=0; i<landmarks.size();i++){
-        //std::cout << "lm->descriptor: "<<landmarks[i]->id<<" shape "<<landmarks[i]->descriptor.rows << "x" << landmarks[i]->descriptor.cols  << std::endl;
-      int id=featureExtractor->match(lmDescriptors.row(i),descriptors,idx,0.9);
+        // std::cout << "lm->descriptor: "<<landmarks[i]->id<<" shape "<<landmarks[i]->descriptor.rows << "x" << landmarks[i]->descriptor.cols  << std::endl;
+        int id=featureExtractor->match(landmarks[i]->descriptor,descriptors,idx,0.9);
         if(id==-1) continue;
         // std::cout<<(this->landmarks[id]==nullptr)<<std::endl;
         if(!this->landmarks[id].lock()){
