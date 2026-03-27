@@ -3,6 +3,8 @@ import numpy as np
 import open3d as o3d
 import time
 
+from .server.app import WebVisualizer  # noqa: F401 – re-exported for convenience
+
 
 class Visualize:
     def __init__(self, atlas) -> None:
