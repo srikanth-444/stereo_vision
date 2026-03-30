@@ -4,8 +4,8 @@
 #include <numeric>
 #include <iostream>
 
-Frame::Frame(int id, cv::Mat& image, int64_t timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic,FeatureExtractor* featureExtractor): 
-id(id),image(image),timeStamp(timeStamp), intrinsic(intrinsic), extrinsic(extrinsic), featureExtractor(featureExtractor){
+Frame::Frame(int id, cv::Mat& image, int64_t timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic,Eigen::Vector4f dist_coefficents,FeatureExtractor* featureExtractor): 
+id(id),image(image),timeStamp(timeStamp), intrinsic(intrinsic), extrinsic(extrinsic),dist_coefficents(dist_coefficents), featureExtractor(featureExtractor){
 }
 
 Eigen::Vector3f Frame::getCameraCenter()const{
@@ -49,6 +49,17 @@ Eigen::MatrixXf Frame::getNotAssociatedPoints()const{
         }
     }
     return result.topRows(row); 
+}
+std::vector<cv::KeyPoint> Frame::getNotAssociatedKeyPoints()const{
+    std::vector<cv::KeyPoint> result;
+    result.reserve(notAssociatedIndices.size());
+   
+    for (int i : notAssociatedIndices) {
+        if (!landmarks[i].lock()) {
+            result.emplace_back(keyPoints[i]);
+        }
+    }
+    return result; 
 }
 cv::Mat Frame::getNotAssociatedDescriptors()const{
     
@@ -173,13 +184,22 @@ Eigen::MatrixXf Frame::projectPoints(Eigen::MatrixXf& objectPoints){
 }
 bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints){
     // std::cout<<"entered the main function"<<std::endl;
-    
+    // cv::Mat debugImg;
+    // if (image.channels() == 1) {
+    //     cv::cvtColor(image, debugImg, cv::COLOR_GRAY2BGR);
+    // } else {
+    //     debugImg = image.clone();
+    // }
+    // for(auto pts:keyPoints){
+    //     cv::circle(debugImg, pts.pt, 2, cv::Scalar(0,255,0), -1);
+    // }
     Eigen::MatrixXf objectPoints(4,landmarks.size());
     for(int i=0; i<landmarks.size();i++)
     {
         float u = landmarks[i]->projectedpoint(0);
         float v = landmarks[i]->projectedpoint(1);
-        auto idx=GetFeaturesInArea(u,v,10);
+        // cv::circle(debugImg, cv::Point2f(u, v), 2, cv::Scalar(255,0,0), -1);
+        auto idx=GetFeaturesInArea(u,v,50);
         int id=featureExtractor->match(landmarks[i]->descriptor,descriptors,idx,0.9);
         if(id==-1) continue;
         if(!this->landmarks[id].lock()){
@@ -195,7 +215,11 @@ bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmark
                 mImagePoints.emplace_back(keyPoints[id].pt);
             }    
         }
+        
+        // cv::line(debugImg, cv::Point2f(u, v), keyPoints[id].pt, cv::Scalar(0,255,255), 1);
     }
+    // cv::imshow("Projection Matches", debugImg);
+    // cv::waitKey(0);
     if(mObjectPoints.size()<8)return false;
     
     return true;

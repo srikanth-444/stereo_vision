@@ -38,7 +38,7 @@ class Pipeline():
         for camera_id, camera in self.camera_map.items():
             frame,timeStamp=camera.get_frame()
             if frame is not None:
-                frame=Frame(self.index,frame,int(timeStamp),camera.intrinsic,camera.extrinsic,camera.feature_extractor)
+                frame=Frame(self.index,frame,int(timeStamp),camera.intrinsic,camera.extrinsic,camera.distortion,camera.feature_extractor)
                 self.index+=1
                 current_frames[camera_id]=frame
         return current_frames
@@ -61,39 +61,14 @@ class Pipeline():
         for t in threads:
             t.join()
         
+        
+        
     
     def estimate_depth(self, left_frame, right_frame):
-        if  self.depth_estimator.__class__.__name__ == "Stereo":
-
-            #get un associated points
-            start_time=time.time()
-            kp_l=left_frame.getNotAssociatedPoints()
-            des_l=left_frame.getNotAssociatedDescriptors()
-            kp_r=right_frame.getNotAssociatedPoints()
-            des_r=right_frame.getNotAssociatedDescriptors()
-            left_not_associated_points=left_frame.getNotAssociatedIndices()
-            point_time=int((time.time()-start_time)*1000)
-
-            #matching stereo
-            start_time=time.time()
-            matches = self.depth_estimator.stereo_match(kp_l, kp_r, des_l, des_r)
-            matches = sorted(matches, key=lambda x: x.distance)
-            ptsL = np.float32([kp_l[m.queryIdx] for m in matches]).reshape(-1,2)
-            ptsR = np.float32([kp_r[m.trainIdx] for m in matches]).reshape(-1,2)
-            filteredkeypoint_ids=np.array([left_not_associated_points[m.queryIdx]for m in matches])
-            stereo_match_time=int((time.time()-start_time)*1000)
-
-            #triangulating
-            start_time=time.time()
-            pts_2d=[ptsL,ptsR]
-            pts_3d,reprojection_errors=self.depth_estimator.get_depth(pts_2d)
-            pts_3d=pts_3d[reprojection_errors<3]
-            filteredkeypoint_ids=filteredkeypoint_ids[reprojection_errors<3]
-            trinagulation_time=int((time.time()-start_time)*1000)
-            self.performance_logger.debug(f"not ass points {point_time}ms | matching {stereo_match_time}ms | traingulation_time {trinagulation_time}ms")
-            return pts_3d,filteredkeypoint_ids
-        else:
-            return None, None, None,None
+        pts_3d,featureids=self.depth_estimator.getDepth(left_frame,right_frame,3)
+        # trinagulation_time=int((time.time()-start_time)*1000)
+        # self.performance_logger.debug(f"not ass points {point_time}ms | matching {stereo_match_time}ms | traingulation_time {trinagulation_time}ms")
+        return pts_3d,featureids
             
     def create_new_landmarks(self, pts_3d,frame,keypoint_idx):
         if pts_3d is not None:
@@ -111,13 +86,13 @@ class Pipeline():
                 
         
     def merging_mappoints(self,frame,newlandmarks):
-        frames=self.currentMap.getClosestKeyFrames(frame,5)
-        for frame in frames:
-            frame.match(newlandmarks)
-            self.currentMap.mergeLandmarks(frame.mergers)
+        mframes=self.currentMap.getClosestKeyFrames(frame,5)
+        for mframe in mframes:
+            mframe.localMatch(newlandmarks)
+            self.currentMap.mergeLandmarks(mframe.mergers)
         landmarks = self.currentMap.getLocalMap(frame)
         start_time=time.time()
-        frame.match(landmarks)
+        frame.localMatch(landmarks)
         self.performance_logger.debug(f"projection matching {int((time.time()-start_time)*1000)}ms")
         start_time=time.time()
         self.pipeline_logger.debug(f"no of mergers detected {len(frame.mergers)}")
@@ -151,7 +126,7 @@ class Pipeline():
             start_time=time.time()
             self.process_frame(frames.values())
             process_time=int((time.time()-start_time)*1000)
-
+            self.depth_estimator.rectifyPoints(left_frame,right_frame)
             #tracking
             get_landmark_time=0
             pose_time=0
@@ -199,7 +174,7 @@ class Pipeline():
             
             # creating landmarks
             #if (c1 and c2) and c3 and not tracking_state:
-            if  (c2 and c1) or not tracking_state:
+            if  (c2 and c1) or c3:
                 # triangulate points
                 start_time=time.time()   
                 pts_3d,keypoint_idx=self.estimate_depth(left_frame,right_frame)
@@ -221,6 +196,7 @@ class Pipeline():
             #gui update
             start_time=time.time()
             self.visualizer.visualize_as_point_cloud(self.T)
+            self.depth_estimator.rectifyImage(left_frame)
             self.visualizer.visualize_pipeline(left_frame)
             gui_time=int((time.time()-start_time)*1000)
             self.performance_logger.info(f"capture {capture_time}ms | Process {process_time}ms | motion_model {pose_time}ms | tracking {tracking_time}ms | depth {depth_time}ms | keyframe {keyframe_time}ms | creat lm {landmarks_time}ms | gui {gui_time}ms")

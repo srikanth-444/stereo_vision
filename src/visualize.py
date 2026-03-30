@@ -82,7 +82,7 @@ class Visualize:
             cv2.LINE_AA
         )
         cv2.imshow('Frame', display_img)
-        cv2.waitKey(0)
+        cv2.waitKey(1)
 
     # ---------------- Add new points to point cloud ----------------
     def add_points(self, new_pts, new_colors):
@@ -146,8 +146,8 @@ class Visualize:
         self.vis.update_renderer()
 
         # Follow camera
-        if T is not None:
-            self.follow_camera(T)
+        # if T is not None:
+        #     self.follow_camera(T)
 
     # ---------------- Camera frustum ----------------
     def update_camera_frustum(self, T, scale=0.2):
@@ -184,7 +184,7 @@ class Visualize:
         view_ctl.set_lookat(lookat)
         view_ctl.set_front(forward)
         view_ctl.set_up(up)
-        view_ctl.set_zoom(0.1)
+        view_ctl.set_zoom(0.01)
     def quat_to_rotmat(self,q):
         """
         q: [w, x, y, z]

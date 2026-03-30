@@ -11,13 +11,12 @@ class Camera:
         cy= intrinsic.get('cy')
 
         T=np.array(extrinsic,dtype=np.float32).reshape(4,4)
-        distortion=np.array(distortion.get('distortion_coefficients',[]),dtype=np.float32)
+        self.distortion=np.array(distortion,dtype=np.float32)
         self.intrinsic=np.array([[fx, 0, cx],[0, fy, cy],[0, 0, 1]],dtype=np.float32)
-        self.distortion=distortion
         self.extrinsic=T
         self.interface=interface
         self.new_intrinsic, _ = cv2.getOptimalNewCameraMatrix(self.intrinsic, self.distortion, (w,h), 1)
-      
+        self.W,self.H=w,h
         self.feature_extractor=feature_extractor
         
 
@@ -40,7 +39,9 @@ class Camera:
             raise ValueError("extrinsic must be a rigid transform (last row must be [0,0,0,1])")
 
         self.extrinsic = extrinsic
-        
+
+    def set_new_intrinsic(self,intrinsic):
+        self.new_intrinsic=intrinsic
 
     def get_frame(self,):
         frame,timestamp = self.interface.read_frame()

@@ -34,7 +34,8 @@ def test_frame_creation():
     time_stamp=np.int64(1.4036365797635556e+18)
     intrinsic=np.array([[280, 0, 360],[0, 280, 360],[0, 0, 1]],dtype=np.float32)
     extrinsic=np.zeros((4,4),dtype=np.float32, order='F')
-    frame=Frame(1,dummy_image,time_stamp,intrinsic,extrinsic,orb)
+    dist_coeff=np.array([0,0,0,0],dtype=np.float32)
+    frame=Frame(1,dummy_image,time_stamp,intrinsic,extrinsic,dist_coeff,orb)
     assert frame.id == 1, f"Expected id 1, got {frame.id}"
     assert np.array_equal(frame.image, dummy_image), "Image does not match"
     assert frame.timeStamp == time_stamp, f"Expected timestamp {time_stamp}, got {frame.timeStamp}"
@@ -47,7 +48,8 @@ def test_landmark_creation():
     time_stamp=1
     intrinsic=np.zeros((3,3),dtype=np.float32, order='F')
     extrinsic=np.zeros((4,4),dtype=np.float32, order='F')
-    frame=Frame(1,dummy_image,time_stamp,intrinsic,extrinsic,orb)
+    dist_coeff=np.array([0,0,0,0],dtype=np.float32)
+    frame=Frame(1,dummy_image,time_stamp,intrinsic,extrinsic,dist_coeff,orb)
     frame.extractFeatures()
     position= np.array([0.0,0.0,0.0],dtype=np.float32, order='F')
     frame.cameraCenter= np.array([0.0,0.0,0.0],dtype=np.float32, order='F')

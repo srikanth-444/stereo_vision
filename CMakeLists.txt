@@ -3,6 +3,8 @@ project(slam_app)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_BUILD_TYPE Release)
+add_definitions(-DEIGEN_MAX_ALIGN_BYTES=16)
 
 # Find global dependencies
 find_package(OpenCV REQUIRED)
@@ -26,9 +28,11 @@ target_link_libraries(slam PUBLIC
     g2o_solver_csparse
     g2o_types_sba 
 )
-add_compile_definitions(EIGEN_MAX_STATIC_ALIGN_BYTES=0)
-add_compile_definitions(EIGEN_DONT_VECTORIZE)
+# add_compile_definitions(EIGEN_MAX_STATIC_ALIGN_BYTES=0)
+# add_compile_definitions(EIGEN_DONT_VECTORIZE)
+add_definitions(-msse -msse2 -msse3 -msse4.1 -msse4.2)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/atlas)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/feature_extractor)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/optimizer)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/depth_estimator/Stereo_Triangulation)
 
