@@ -19,7 +19,7 @@ class Tracker():
 
     def get_closest_landmarks(self,type, frame):
         landmarks = []
-        if type=="Temporal":
+        if type:
             landmarks=self.currentMap.getLastKeyFrame().getLandmarks()
             landmarks=frame.getVisibleLandmarks(landmarks)
         else:
@@ -33,20 +33,20 @@ class Tracker():
             start_time=time.time()
             q,t=T[0],T[1]
             frame.setCameraWorldPose(q,t)
-            landmarks=self.get_closest_landmarks("Temporal",frame)
+            landmarks=self.get_closest_landmarks(True,frame)
             self.tracker_logger.debug(f"landmarks that are visible {len(landmarks)}")
             matched_objects, matched_images=frame.projectionMatch(landmarks)
             matching_time=(time.time()-start_time)*1000
             self.tracker_logger.debug(f"length of matched points {len(matched_objects)}")
             if len(matched_objects) < 20:
                 matched_objects, matched_images=frame.match(landmarks)
-                self.tracker_logger.debug(f"length of matched points {len(matched_objects)}")
-            if len(matched_objects) < 20:
-                return False
+            #     self.tracker_logger.debug(f"length of matched points {len(matched_objects)}")
+            # if len(matched_objects) < 20:
+            #     return False
             
             start_time=time.time()
             self.optimizer.optimizePose(frame)
-            landmarks=self.get_closest_landmarks("Local",frame)
+            landmarks=self.get_closest_landmarks(False,frame)
             self.tracker_logger.debug(f"landmarks that are visible {len(landmarks)}")
             matched_objects, matched_images=frame.projectionMatch(landmarks)
             self.tracker_logger.debug(f"length of matched points {len(matched_objects)}")

@@ -10,7 +10,6 @@ Optimizer::Optimizer(bool verbose){
 }
 void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
     optimizer.clear();
-
     Eigen::Matrix3d R = frame->Tcw.block<3,3>(0,0).cast<double>();
     Eigen::Vector3d t = frame->Tcw.block<3,1>(0,3).cast<double>();
     Eigen::Quaterniond qd(R);
@@ -25,16 +24,25 @@ void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
     auto landmarks = frame->getLandmarks();
     auto imagePoints = frame->getTrackedPoints();
 
+    // std::cout << "landmarks: " << landmarks.size()
+    //       << " imagePoints: " << imagePoints.size() << std::endl;
     std::vector<g2o::EdgeSE3ProjectXYZOnlyPose*> edges;
     edges.reserve(landmarks.size());
-
+    // std::cout<<"edges pointer created"<<std::endl;
     for (size_t i = 0; i < landmarks.size(); ++i) {
-
+        // std::cout<<"iteration: "<<i
+        //         <<"landmark id: "<<landmarks[i]->id
+        //         <<"point3d: "<<landmarks[i]->point3D
+        //         <<"image points"<<imagePoints[i]<<std::endl;
         auto edge = new g2o::EdgeSE3ProjectXYZOnlyPose();
-        
-        edge->setVertex(0, pose);
-        edge->setMeasurement(imagePoints[i].cast<double>());
-        edge->setInformation(Eigen::Matrix2d::Identity());
+        auto variance = static_cast<double>(landmarks[i]->point3D(2));
+        double min_variance = 1e-6; // or some small epsilon
+        variance = std::max(variance, min_variance);
+        Eigen::Matrix<double,2,1> obs;
+        obs << imagePoints[i][0], imagePoints[i][1];
+        edge->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
+        edge->setMeasurement(obs);
+        edge->setInformation(Eigen::Matrix2d::Identity()/variance);
 
         // Set the fixed 3D point directly into the edge
         edge->Xw = landmarks[i]->point3D.cast<double>();
@@ -51,14 +59,15 @@ void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
         rk->setDelta(std::sqrt(5.991)); // Chi-square threshold for 2 degrees of freedom
 
         optimizer.addEdge(edge);
-        edges.push_back(edge);
+        edges.emplace_back(edge);
     }
-
+    // std::cout<<"intializing optimization"<<std::endl;
     // 4. Run Optimization
     optimizer.initializeOptimization();
-    const int max_iterations = 10; 
+    const int max_iterations = 4; 
     for(int iter = 0; iter < max_iterations; ++iter){
-        optimizer.optimize(1); // one iteration at a time
+        // std::cout<<"starting iter"<<std::endl;
+        optimizer.optimize(10); // one iteration at a time
 
         // Remove high-reprojection-error edges
         for(auto edge : edges){
@@ -67,9 +76,15 @@ void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
                 if(error > 5.991){ // same chi2 threshold
                     edge->setLevel(1); // deactivate for next iteration
                 }
+                else {
+                    edge->setLevel(0);
+                    edge->setRobustKernel(0); // Only remove Huber for inliers
+                }
             }
+            // if(iter == 2)edge->setRobustKernel(0);
         }
     }
+
 
     Eigen::Matrix4f Tcw=(pose->estimate().to_homogeneous_matrix().cast<float>()).eval();
     // 5. Update Frame Pose

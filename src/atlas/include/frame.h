@@ -2,6 +2,7 @@
 #define FRAME_H
 
 #include <opencv2/core/core.hpp>
+#include <opencv2/opencv.hpp>
 #include <Eigen/Dense>
 #include "utils.h"
 #include <cstdint>
@@ -11,6 +12,7 @@ class Landmark;
 class FeatureExtractor;
 class Frame : public std::enable_shared_from_this<Frame>{
     public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     int id=-1;
     int64_t timeStamp =0;
     bool keyFrame =false;
@@ -33,14 +35,16 @@ class Frame : public std::enable_shared_from_this<Frame>{
     Eigen::Matrix4f Tcw=Eigen::Matrix4f::Identity(); 
     Eigen::Matrix3f intrinsic;
     Eigen::Matrix4f extrinsic;
-
     Eigen::MatrixXf projectedPoints;
+    Eigen::Vector4f dist_coefficents;
+
     //constructor
-    Frame(int id, cv::Mat& image, int64_t timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic, FeatureExtractor* featureExtractor);
+    Frame(int id, cv::Mat& image, int64_t timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic,Eigen::Vector4f dist_coefficents, FeatureExtractor* featureExtractor);
 
     //Getters
     std::vector<int>getNotAssociatedIndices()const;
     Eigen::MatrixXf  getNotAssociatedPoints() const;
+    std::vector<cv::KeyPoint> getNotAssociatedKeyPoints()const;
     cv::Mat getNotAssociatedDescriptors() const;
     std::vector<std::shared_ptr<Landmark>> getLandmarks() const;
     std::vector<Eigen::Vector2f>getTrackedPoints() const;

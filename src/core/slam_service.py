@@ -35,7 +35,7 @@ def start_service():
     for camera_config in cameras_config:
         intrinsic=camera_config.get('intrinsic',{})
         extrinsic= camera_config.get('extrinsic',{})
-        distortion= camera_config.get('distortion',{})
+        distortion= camera_config.get('distortion_coefficients',[])
         interface_config= camera_config.get('interface',{})
         interface=interface_factory(interface_config)
         [w,h]=camera_config.get('resolution',[0,0])
@@ -50,13 +50,14 @@ def start_service():
     atlas=Atlas()
     depth_estimator_config=visual_odometry_config.get('depth_estimator',{})
     tracker_config=visual_odometry_config.get('tracker',{})
-    optimizer=Optimizer(True)
+    optimizer=Optimizer(False)
     tracker=Tracker(tracker_config,optimizer,camera_map[tracker_config.get('camera_id',0)],atlas)
     
     if depth_estimator_config.get('type')=='stereo':
         left_camera=camera_map[depth_estimator_config.get('left_camera_id',{})]
         right_camera=camera_map[depth_estimator_config.get('right_camera_id',{})]
-        depth_estimator=Stereo(left_camera,right_camera)
+        depth_estimator=Stereo.Stereo(left_camera.intrinsic,left_camera.extrinsic,left_camera.distortion,
+                                      right_camera.intrinsic,right_camera.extrinsic,right_camera.distortion,left_camera.W,left_camera.H)
     visualizer=Visualize(atlas)
     pipeline=pipeline_factory(atlas,tracker,depth_estimator,motion_model,visualizer,camera_map)
     

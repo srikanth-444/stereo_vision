@@ -46,13 +46,13 @@ void bind_frame(py::module_ &m) {
 
     py::class_<Frame,std::shared_ptr<Frame>>(m, "Frame")
         .def(py::init([](
-        int id, py::array_t<uint8_t> img, int64_t timeStamp,Eigen::Matrix3f K, Eigen::Matrix4f Tcw,FeatureExtractor* extractor
+        int id, py::array_t<uint8_t> img, int64_t timeStamp,Eigen::Matrix3f K, Eigen::Matrix4f Tcw,Eigen::Vector4f dist_coefficents,FeatureExtractor* extractor
         ) 
     {   
         py::buffer_info buf = img.request();
         cv::Mat mat(buf.shape[0], buf.shape[1], CV_8UC1, (unsigned char*)buf.ptr);
         cv::Mat mat_copy=mat.clone();
-        return std::make_shared<Frame>(id, mat_copy, timeStamp, K, Tcw, extractor);
+        return std::make_shared<Frame>(id, mat_copy, timeStamp, K, Tcw,dist_coefficents,extractor);
     })) 
         .def_readwrite("id", &Frame::id)
         .def_property_readonly("image", [](Frame &f){ return mat_to_numpy(f.image); })

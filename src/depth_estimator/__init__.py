@@ -1,3 +1,3 @@
-from .stereo_pair import Stereo
+from .Stereo_Triangulation import Stereo
 
 __all__=['Stereo']

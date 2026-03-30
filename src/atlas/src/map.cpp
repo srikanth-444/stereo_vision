@@ -116,7 +116,8 @@ std::vector<std::shared_ptr<Landmark>> Map::getLocalMap(const std::shared_ptr<Fr
     for (auto& f : frames) {
         for (auto& lm : f->getLandmarks()) {
             if (uniqueIds.insert(lm->id).second) {
-                landmarks.push_back(lm);
+                    landmarks.push_back(lm);
+                
             }
         }
     }

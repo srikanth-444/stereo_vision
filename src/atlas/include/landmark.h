@@ -13,7 +13,7 @@ class Frame;
 class Landmark{
     
     public:
-
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     int id;
     cv::Mat descriptor;
     std::unordered_map<std::weak_ptr<Frame>, int, WeakPtrHash, WeakPtrEqual> observations;

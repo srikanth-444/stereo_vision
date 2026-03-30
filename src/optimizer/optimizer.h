@@ -9,6 +9,7 @@
 
 class Optimizer{
     public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     g2o::SparseOptimizer optimizer;
     Optimizer(bool verbose);
     void optimizePose(std::shared_ptr<Frame> frame);
