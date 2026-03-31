@@ -13,25 +13,22 @@ from concurrent.futures import ThreadPoolExecutor
 
 class Pipeline():
 
-    def __init__(self, atlas, tracker,depth_estimator,motion_model,visualizer,camera_map,no_workers=4):
+    def __init__(self, atlas, tracker,depth_estimator,visualizer,camera_map,no_workers=4):
         self.atlas=atlas
         self.currentMap=self.atlas.initiateNewMap()
         self.tracker=tracker
         
         
         self.depth_estimator=depth_estimator
-        q=np.array([0,0,0,1],dtype=np.float32)
-        t=np.array([0,0,0],dtype=np.float32).reshape(3,1)
-        self.T=(q,t)
-        self.path=[]
+        
         
         self.current_frame=None
         self.visualizer=visualizer
         self.camera_map=camera_map
-        self.motion_model=motion_model
         self.performance_logger=logging.getLogger("Performance")
         self.pipeline_logger=logging.getLogger("Pipeline   ")
         self.index=0
+        self.create_keyframe=True
 
     def getFrames(self,):
         current_frames={}
@@ -81,7 +78,10 @@ class Pipeline():
                 keyframe = self.currentMap.getAgedFrame(2)
                 if keyframe is not None:
                     landmarks=keyframe.getLandmarks()
+                    bf=len(landmarks)
                     self.currentMap.removeBadLandmarks(landmarks)
+                    af=len(keyframe.getLandmarks())
+                    self.pipeline_logger.debug(f"no of landmarks removed: {bf-af}")
                 self.performance_logger.debug(f"landmark removeal {int((time.time()-start_time)*1000)}")
                 
         
@@ -127,54 +127,17 @@ class Pipeline():
             self.process_frame(frames.values())
             process_time=int((time.time()-start_time)*1000)
             self.depth_estimator.rectifyPoints(left_frame,right_frame)
+
+            
             #tracking
-            get_landmark_time=0
-            pose_time=0
             tracking_time=0
-            tracking_state=False
-            if previous_frame is not None :
+            start_time=time.time()
+            self.create_keyframe=self.tracker.track([left_frame])  
+            tracking_time= int((time.time()-start_time)*1000)     
 
-                # predict T from motion model
-                start_time=time.time()
-                if len(self.path)>2:
-                    qprev,tprev=self.path[-2]
-                    qcurr,tcurr=self.path[-1]
-                    self.T=self.motion_model(qprev,tprev,qcurr,tcurr)
-                pose_time=int((time.time()-start_time)*1000)
+            if  self.create_keyframe:
+                self.create_keyframe=False
 
-
-                # track landmarks
-                start_time=time.time()
-                tracking_state=self.tracker.track_landmarks(self.T,[left_frame])
-                # if not tracking_state:
-                #     self.currentMap=self.atlas.initiateNewMap()    
-                self.T=left_frame.worldPose
-                tracking_time= int((time.time()-start_time)*1000)     
-            
-            if previous_frame is None:
-                c1=True
-                c2=True
-                c3=True
-                c4=True
-                left_frame.setCameraWorldPose(self.T[0],self.T[1])
-                # print(left_frame.cameraCenter)
-            else:
-                no_tracked_landmarks=len(left_frame.getTrackedPoints())
-                self.pipeline_logger.debug(f"no of tracked landmarks{no_tracked_landmarks}")
-                c1=no_tracked_landmarks<left_frame.nVisible*0.25
-                c2=(left_frame.id-self.currentMap.getLastKeyFrame().id)>6
-                frame=self.currentMap.getLastKeyFrame()
-                T=frame.worldPose
-                c3=np.linalg.norm(T[1]-self.T[1])>0.1
-                c4=no_tracked_landmarks<20
-            depth_time=0
-            landmarks_time=0
-            keyframe_time=0
-            self.pipeline_logger.debug(f"c1:{c1} ,c2:{c2} ,c3:{c3} ,c4:{c4}")
-            
-            # creating landmarks
-            #if (c1 and c2) and c3 and not tracking_state:
-            if  (c2 and c1) or c3:
                 # triangulate points
                 start_time=time.time()   
                 pts_3d,keypoint_idx=self.estimate_depth(left_frame,right_frame)
@@ -185,22 +148,21 @@ class Pipeline():
                 self.currentMap.setKeyframe(left_frame)
 
                 self.pipeline_logger.debug(f"new keyframe id {left_frame.id}")
-                previous_frame=left_frame
                 keyframe_time=int((time.time()-start_time)*1000) 
                 start_time=time.time()
                 self.create_new_landmarks(pts_3d,left_frame,keypoint_idx)
                 landmarks_time=int((time.time()-start_time)*1000) 
             self.pipeline_logger.debug(f"length of keyframes {self.currentMap.getLengthKeyFrame()}")
-            self.path.append(self.T)
+
 
             #gui update
             start_time=time.time()
-            self.visualizer.visualize_as_point_cloud(self.T)
+            # self.visualizer.visualize_as_point_cloud(left_frame.worldPose)
             self.depth_estimator.rectifyImage(left_frame)
             self.visualizer.visualize_pipeline(left_frame)
             gui_time=int((time.time()-start_time)*1000)
-            self.performance_logger.info(f"capture {capture_time}ms | Process {process_time}ms | motion_model {pose_time}ms | tracking {tracking_time}ms | depth {depth_time}ms | keyframe {keyframe_time}ms | creat lm {landmarks_time}ms | gui {gui_time}ms")
+            self.performance_logger.info(f"capture {capture_time}ms | Process {process_time}ms | tracking {tracking_time}ms | depth {depth_time}ms | keyframe {keyframe_time}ms | creat lm {landmarks_time}ms | gui {gui_time}ms")
             
 
-def pipeline_factory( atlas, tracker,depth_estimator,motion_model,visualizer,camera_map=None):
-    return Pipeline( atlas, tracker,depth_estimator,motion_model,visualizer,camera_map)
+def pipeline_factory( atlas, tracker,depth_estimator,visualizer,camera_map=None):
+    return Pipeline( atlas, tracker,depth_estimator,visualizer,camera_map)

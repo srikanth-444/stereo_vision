@@ -31,6 +31,7 @@ class Landmark{
     bool isVisible(const Eigen::Vector3f& cameraCenter,const Eigen::Vector3f& cameraNormal,float distThresh=2, float angleThresh=60);
     void addObservation(std::weak_ptr<Frame> frame, int featureId);
     bool hasObservation(const std::weak_ptr<Frame>& frame, int featureId) const;
+    bool removeObservation(std::shared_ptr<Frame>& frame);
     void erase();
     void updateDescriptor();  
     void increaseVisible();

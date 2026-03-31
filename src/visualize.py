@@ -66,9 +66,16 @@ class Visualize:
             display_img = cv2.cvtColor(display_img, cv2.COLOR_GRAY2BGR)
 
         # Draw tracked points
-        for pt in frame.getTrackedPoints():
+        points=frame.getTrackedPoints()
+        lms=frame.getLandmarks()
+        for pt,lm in zip(points,lms):
             x, y = int(pt[0]), int(pt[1])
             cv2.circle(display_img, (x, y), 2, (0, 255, 0), -1)
+
+            x1,y1=int(lm.projectedpoint[0]),int(lm.projectedpoint[1])  
+            cv2.circle(display_img, (x1,y1),2,(255,0,0),1)
+
+            cv2.line(display_img, (x, y), (x1, y1), (0, 0, 255), 2)
 
         # Draw FPS
         cv2.putText(
@@ -147,7 +154,7 @@ class Visualize:
 
         # Follow camera
         # if T is not None:
-        #     self.follow_camera(T)
+        #     self.chase_view(T)
 
     # ---------------- Camera frustum ----------------
     def update_camera_frustum(self, T, scale=0.2):
@@ -156,10 +163,10 @@ class Visualize:
         # Define frustum in camera frame
         points = np.array([
             [0,0,0],
-            [0.5,0.5,0.5],
-            [0.5,-0.5,0.5],
-            [-0.5,-0.5,0.5],
-            [-0.5,0.5,0.5]
+            [0.2,0.3,0.5],
+            [0.2,-0.3,0.5],
+            [-0.2,-0.3,0.5],
+            [-0.2,0.3,0.5]
         ], dtype=np.float64) * scale
 
         points = (points @ R_mat.T) + t
@@ -185,6 +192,22 @@ class Visualize:
         view_ctl.set_front(forward)
         view_ctl.set_up(up)
         view_ctl.set_zoom(0.01)
+    def chase_view(self, T):
+        ctr = self.vis.get_view_control()
+
+        t = np.asarray(T[1]).reshape(3,) @ self.R_transform.T
+        cam_pos = t
+        offset = np.array([0.0, 0.0, -1.0])
+        eye = cam_pos + offset
+        lookat = cam_pos
+        up = np.array([0, 1, 0])
+        front = lookat - eye
+        front = front / np.linalg.norm(front)
+
+        ctr.set_lookat(lookat)
+        ctr.set_front(front)
+        ctr.set_up(up)
+        ctr.set_zoom(0.01)
     def quat_to_rotmat(self,q):
         """
         q: [w, x, y, z]

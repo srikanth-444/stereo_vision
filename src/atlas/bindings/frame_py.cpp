@@ -96,12 +96,12 @@ void bind_frame(py::module_ &m) {
                 (float*)imagePoints.data());
                 return py::make_tuple(obpoints, impoints);
         })
-        .def("projectionMatch", [](Frame &f, std::vector<std::shared_ptr<Landmark>> landmarks)
+        .def("projectionMatch", [](Frame &f, std::vector<std::shared_ptr<Landmark>> landmarks,int r)
             {
                 std::vector<cv::Point3f> objectPoints;
                 std::vector<cv::Point2f> imagePoints;
 
-                f.projectionMatch(landmarks, objectPoints, imagePoints);
+                f.projectionMatch(landmarks, objectPoints, imagePoints,r);
                 py::array_t obpoints=py::array_t<float>(
                 { (int)objectPoints.size(), 3 },         
                 { sizeof(cv::Point3f), sizeof(float) }, 

@@ -51,7 +51,7 @@ def start_service():
     depth_estimator_config=visual_odometry_config.get('depth_estimator',{})
     tracker_config=visual_odometry_config.get('tracker',{})
     optimizer=Optimizer(False)
-    tracker=Tracker(tracker_config,optimizer,camera_map[tracker_config.get('camera_id',0)],atlas)
+    tracker=Tracker(tracker_config,optimizer,camera_map[tracker_config.get('camera_id',0)],atlas,motion_model)
     
     if depth_estimator_config.get('type')=='stereo':
         left_camera=camera_map[depth_estimator_config.get('left_camera_id',{})]
@@ -59,7 +59,7 @@ def start_service():
         depth_estimator=Stereo.Stereo(left_camera.intrinsic,left_camera.extrinsic,left_camera.distortion,
                                       right_camera.intrinsic,right_camera.extrinsic,right_camera.distortion,left_camera.W,left_camera.H)
     visualizer=Visualize(atlas)
-    pipeline=pipeline_factory(atlas,tracker,depth_estimator,motion_model,visualizer,camera_map)
+    pipeline=pipeline_factory(atlas,tracker,depth_estimator,visualizer,camera_map)
     
     logging.info("Starting SLAM pipeline...")
     pipeline.run()

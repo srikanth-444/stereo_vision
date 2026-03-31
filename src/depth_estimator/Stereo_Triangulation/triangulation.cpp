@@ -118,6 +118,7 @@ void Stereo::getDepth(std::shared_ptr<Frame> &leftFrame,std::shared_ptr<Frame> &
         if (disparity < 1.0f) continue;
 
         float Z = fx * baseline / disparity;
+        if(Z>15)continue;
         float X = (rect_l[i].x - cx) * Z / fx;
         float Y = (rect_l[i].y - cy) * Z / fy;
 
@@ -134,6 +135,7 @@ void Stereo::getDepth(std::shared_ptr<Frame> &leftFrame,std::shared_ptr<Frame> &
         );
         // std::cout<<reproj_error<<std::endl;
         if (reproj_error > 3.0f) continue;
+        
         auto p_cam=Eigen::Vector3f(X,Y,Z);
         Eigen::Vector3f p_world = l_extrinsic.block<3,3>(0,0) * p_cam 
                           + l_extrinsic.block<3,1>(0,3);
