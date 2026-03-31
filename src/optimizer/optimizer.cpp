@@ -23,65 +23,74 @@ void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
 
     auto landmarks = frame->getLandmarks();
     auto imagePoints = frame->getTrackedPoints();
-
-    // std::cout << "landmarks: " << landmarks.size()
-    //       << " imagePoints: " << imagePoints.size() << std::endl;
+    auto ids=frame->getTrackedIds();
     std::vector<g2o::EdgeSE3ProjectXYZOnlyPose*> edges;
     edges.reserve(landmarks.size());
-    // std::cout<<"edges pointer created"<<std::endl;
+
     for (size_t i = 0; i < landmarks.size(); ++i) {
-        // std::cout<<"iteration: "<<i
-        //         <<"landmark id: "<<landmarks[i]->id
-        //         <<"point3d: "<<landmarks[i]->point3D
-        //         <<"image points"<<imagePoints[i]<<std::endl;
         auto edge = new g2o::EdgeSE3ProjectXYZOnlyPose();
         auto variance = static_cast<double>(landmarks[i]->point3D(2));
-        double min_variance = 1e-6; // or some small epsilon
+        double min_variance = 1e-6; 
         variance = std::max(variance, min_variance);
         Eigen::Matrix<double,2,1> obs;
         obs << imagePoints[i][0], imagePoints[i][1];
         edge->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
         edge->setMeasurement(obs);
-        edge->setInformation(Eigen::Matrix2d::Identity()/variance);
+        edge->setInformation(Eigen::Matrix2d::Identity());
 
-        // Set the fixed 3D point directly into the edge
         edge->Xw = landmarks[i]->point3D.cast<double>();
         
-        // Set camera intrinsics
+
         edge->fx = frame->intrinsic(0,0);
         edge->fy = frame->intrinsic(1,1);
         edge->cx = frame->intrinsic(0,2);
         edge->cy = frame->intrinsic(1,2);
 
-        // Robust Kernel is still highly recommended for PnP
         g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
         edge->setRobustKernel(rk);
-        rk->setDelta(std::sqrt(5.991)); // Chi-square threshold for 2 degrees of freedom
+        rk->setDelta(std::sqrt(5.991));
 
         optimizer.addEdge(edge);
         edges.emplace_back(edge);
     }
-    // std::cout<<"intializing optimization"<<std::endl;
+    
     // 4. Run Optimization
-    optimizer.initializeOptimization();
     const int max_iterations = 4; 
     for(int iter = 0; iter < max_iterations; ++iter){
-        // std::cout<<"starting iter"<<std::endl;
-        optimizer.optimize(10); // one iteration at a time
 
-        // Remove high-reprojection-error edges
-        for(auto edge : edges){
-            if(!edge->level()) { // only consider active edges
+        optimizer.initializeOptimization(0);
+         // 2. Run a few iterations
+        optimizer.optimize(5); 
+
+        int active_count = 0;
+
+        // 3. Update ALL edges (both active and inactive)
+        for(auto* edge : edges) {
+            // Calculate error based on current vertex positions
+                edge->computeError(); 
                 double error = edge->chi2();
-                if(error > 5.991){ // same chi2 threshold
-                    edge->setLevel(1); // deactivate for next iteration
+
+                if(error > 5.991) { 
+                    edge->setLevel(1); // Deactivate/Keep inactive
                 }
                 else {
-                    edge->setLevel(0);
-                    edge->setRobustKernel(0); // Only remove Huber for inliers
+                    edge->setLevel(0); // Re-activate/Keep active
+                    active_count++;
                 }
             }
-            // if(iter == 2)edge->setRobustKernel(0);
+
+            // 4. Safety check: stop if the graph becomes too thin
+            if(active_count < 10) {
+                std::cout << "Optimization stopped: too few inliers." << std::endl;
+                break;
+            }
+    }
+
+    for(int i=0; i<edges.size(); i++){
+        if(edges[i]->level() == 1){
+
+            frame->landmarks[ids[i]].reset();
+    
         }
     }
 
@@ -96,3 +105,112 @@ void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
     q_.normalize();
     frame->setCameraWorldPose(q_,t_);
 }
+
+// void Optimizer::localBundleAdjustment(std::shared_ptr<Frame> frame, std::shared_ptr<Map> currentMap) {
+//     optimizer.clear();
+    
+//     auto frames = currentMap->getClosestKeyFrames(frame);
+
+//     // Collect unique landmarks
+//     std::unordered_set<int> uniqueIds;
+//     std::vector<std::shared_ptr<Landmark>> landmarks;
+//     for (auto& f : frames) {
+//         for (auto& lm : f->getLandmarks()) {
+//             if (uniqueIds.insert(lm->id).second) {
+//                 landmarks.push_back(lm);
+//             }
+//         }
+//     }
+
+//     const int LANDMARK_ID_OFFSET = 1000000;
+
+//     std::vector<g2o::EdgeSE3ProjectXYZ*> edges;
+//     edges.reserve(landmarks.size());
+
+//     for (auto lm : landmarks) {
+        
+//         auto v = new g2o::VertexPointXYZ();
+//         v->setId(lm->id + LANDMARK_ID_OFFSET);  
+//         v->setEstimate(lm->point3D.cast<double>());
+//         v->setFixed(false);
+//         optimizer.addVertex(v);
+
+//         for (const auto& [weakFrame, fid] : lm->observations) {
+//             auto mframe = weakFrame.lock();
+//             if (!mframe) continue;
+
+//             if (!optimizer.vertex(mframe->id)) {
+//                 auto vertex = new g2o::VertexSE3Expmap();
+//                 vertex->setId(mframe->id);
+
+//                 Eigen::Matrix3d R = mframe->Tcw.block<3,3>(0,0).cast<double>();
+//                 Eigen::Vector3d t = mframe->Tcw.block<3,1>(0,3).cast<double>();
+//                 Eigen::Quaterniond qd(R);
+//                 qd.normalize();
+            
+//                 vertex->setEstimate(g2o::SE3Quat(qd,t)); 
+
+//                 bool isLocal = std::find(frames.begin(), frames.end(), mframe) != frames.end();
+//                 vertex->setFixed(!isLocal);
+
+//                 optimizer.addVertex(vertex);  
+//             }
+
+
+//             auto* landmarkVertex = optimizer.vertex(lm->id + LANDMARK_ID_OFFSET); // FIX 1
+//             auto* frameVertex    = optimizer.vertex(mframe->id);
+//             if (!landmarkVertex || !frameVertex) continue;
+
+//             auto edge = new g2o::EdgeSE3ProjectXYZ();
+//             Eigen::Matrix<double, 2, 1> obs;
+//             obs << mframe->keyPoints[fid].pt.x, mframe->keyPoints[fid].pt.y;
+
+//             edge->setVertex(0, landmarkVertex);
+//             edge->setVertex(1, frameVertex);
+//             edge->setMeasurement(obs);
+//             edge->setInformation(Eigen::Matrix2d::Identity());
+//             edge->fx = mframe->intrinsic(0, 0);
+//             edge->fy = mframe->intrinsic(1, 1);
+//             edge->cx = mframe->intrinsic(0, 2);
+//             edge->cy = mframe->intrinsic(1, 2);
+
+//             g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+//             edge->setRobustKernel(rk);
+//             rk->setDelta(std::sqrt(5.991));
+
+//             optimizer.addEdge(edge);
+//             edges.emplace_back(edge);
+//         }
+//     }
+
+
+//     const int max_iterations = 4; 
+//     for(int iter = 0; iter < max_iterations; ++iter){
+
+//         optimizer.initializeOptimization(0);
+    
+//         optimizer.optimize(5); 
+
+//         int active_count = 0;
+
+//         for(auto* edge : edges) {
+//                 edge->computeError(); 
+//                 double error = edge->chi2();
+
+//                 if(error > 5.991) { 
+//                     edge->setLevel(1); 
+//                 }
+//                 else {
+//                     edge->setLevel(0); 
+//                     active_count++;
+//                 }
+//             }
+
+//             if(active_count < 10) {
+//                 std::cout << "Optimization stopped: too few inliers." << std::endl;
+//                 break;
+//             }
+//     }
+
+// }
+

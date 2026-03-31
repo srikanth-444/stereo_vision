@@ -100,6 +100,18 @@ std::vector<Eigen::Vector2f> Frame::getTrackedPoints()const{
     return result;
 }
 
+std::vector<int>Frame::getTrackedIds()const{
+    std::vector<int> result;
+    result.reserve(keyPoints.size());
+    for(int i=0; i<landmarks.size(); i++){
+        auto lm=landmarks[i].lock();
+        if(lm){
+            result.emplace_back(i);
+        }
+    }
+    return result; 
+}
+
 void Frame::updateCovisibility(){
     
     // std::cout<<landmarks.size()<<std::endl;
@@ -182,7 +194,7 @@ Eigen::MatrixXf Frame::projectPoints(Eigen::MatrixXf& objectPoints){
     return imagePoints;
 
 }
-bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints){
+bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints,int r){
     // std::cout<<"entered the main function"<<std::endl;
     // cv::Mat debugImg;
     // if (image.channels() == 1) {
@@ -199,7 +211,7 @@ bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmark
         float u = landmarks[i]->projectedpoint(0);
         float v = landmarks[i]->projectedpoint(1);
         // cv::circle(debugImg, cv::Point2f(u, v), 2, cv::Scalar(255,0,0), -1);
-        auto idx=GetFeaturesInArea(u,v,50);
+        auto idx=GetFeaturesInArea(u,v,r);
         int id=featureExtractor->match(landmarks[i]->descriptor,descriptors,idx,0.9);
         if(id==-1) continue;
         if(!this->landmarks[id].lock()){
@@ -274,7 +286,7 @@ void Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>> landmar
     
         float u = landmarks[i]->projectedpoint(0);
         float v = landmarks[i]->projectedpoint(1);
-
+        // std::cout<<"u: "<<u<<"v: "<<v<<std::endl;
         auto idx=GetFeaturesInArea(u,v,50);
         int id=featureExtractor->match(landmarks[i]->descriptor,descriptors,idx,0.9);
         if(id==-1) continue;

@@ -18,6 +18,8 @@ Landmark::Landmark(int id, const Eigen::Vector3f point3D, std::shared_ptr<Frame>
     }
    
     addObservation(frame, featureId);
+    cv::KeyPoint kp=frame->keyPoints[featureId];
+    projectedpoint=Eigen::Vector2f(kp.pt.x,kp.pt.y);
     
 }
 
@@ -38,6 +40,12 @@ bool Landmark::hasObservation(const std::weak_ptr<Frame>& frame, int featureId) 
             return true;
     }
     return false;
+}
+bool Landmark::removeObservation(std::shared_ptr<Frame>& frame){
+    
+    auto it = observations.find(frame);
+    if (it != observations.end())observations.erase(it);
+    return true;
 }
 
 void Landmark::setNormal(const Eigen::Vector3f& cameraCenter)

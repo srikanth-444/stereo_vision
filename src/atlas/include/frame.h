@@ -23,6 +23,7 @@ class Frame : public std::enable_shared_from_this<Frame>{
     cv::Mat descriptors;
     int nVisible;
 
+
     std::vector<std::weak_ptr<Landmark>> landmarks;
     std::vector<int> notAssociatedIndices;
     std::unordered_map<std::weak_ptr<Frame>, int, WeakPtrHash, WeakPtrEqual> covisibility;
@@ -48,6 +49,7 @@ class Frame : public std::enable_shared_from_this<Frame>{
     cv::Mat getNotAssociatedDescriptors() const;
     std::vector<std::shared_ptr<Landmark>> getLandmarks() const;
     std::vector<Eigen::Vector2f>getTrackedPoints() const;
+    std::vector<int>getTrackedIds()const;
     Eigen::Vector3f getCameraCenter() const;
 
     //Setters
@@ -56,7 +58,7 @@ class Frame : public std::enable_shared_from_this<Frame>{
  
     
     void updateCovisibility();
-    bool projectionMatch(std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints);
+    bool projectionMatch(std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints,int r);
     void projectionMatch(std::vector<std::shared_ptr<Landmark>>landmarks);
     void match(std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints);
     void extractFeatures();

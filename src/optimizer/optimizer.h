@@ -6,6 +6,7 @@
 #include <g2o/types/sba/types_six_dof_expmap.h>
 #include "frame.h"
 #include "landmark.h"
+#include "map.h"
 
 class Optimizer{
     public:
@@ -13,5 +14,7 @@ class Optimizer{
     g2o::SparseOptimizer optimizer;
     Optimizer(bool verbose);
     void optimizePose(std::shared_ptr<Frame> frame);
+    void optimizeBundle(std::vector<std::shared_ptr<Frame>>frame);
+    void localBundleAdjustment(std::shared_ptr<Frame> frame, std::shared_ptr<Map>currentMap)
 };
 
