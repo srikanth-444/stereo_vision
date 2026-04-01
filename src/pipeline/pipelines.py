@@ -13,14 +13,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 class Pipeline():
 
-    def __init__(self, atlas, tracker,depth_estimator,visualizer,camera_map,no_workers=4):
+    def __init__(self, atlas, tracker,depth_estimator,visualizer,camera_map,optimizer,no_workers=4):
         self.atlas=atlas
         self.currentMap=self.atlas.initiateNewMap()
         self.tracker=tracker
         
         
         self.depth_estimator=depth_estimator
-        
+        self.Optimizer=optimizer
         
         self.current_frame=None
         self.visualizer=visualizer
@@ -75,13 +75,15 @@ class Pipeline():
                     self.merging_mappoints(frame, landmarks)
                     frame.updateCovisibility()
                 start_time=time.time()
-                keyframe = self.currentMap.getAgedFrame(2)
-                if keyframe is not None:
-                    landmarks=keyframe.getLandmarks()
-                    bf=len(landmarks)
-                    self.currentMap.removeBadLandmarks(landmarks)
-                    af=len(keyframe.getLandmarks())
-                    self.pipeline_logger.debug(f"no of landmarks removed: {bf-af}")
+                # keyframe = self.currentMap.getAgedFrame(2)
+                # if keyframe is not None:
+                #     landmarks=keyframe.getLandmarks()
+                #     bf=len(landmarks)
+                #     self.currentMap.removeBadLandmarks(landmarks)
+                #     af=len(keyframe.getLandmarks())
+                #     self.pipeline_logger.debug(f"no of landmarks removed: {bf-af}")
+                if self.currentMap.getLengthKeyFrame()>5:
+                    self.Optimizer.localBundleAdjustment(frame,self.currentMap)
                 self.performance_logger.debug(f"landmark removeal {int((time.time()-start_time)*1000)}")
                 
         
@@ -108,7 +110,7 @@ class Pipeline():
     def run(self,):
         previous_frame = None
         
-        for i in range(0,10000):
+        for i in range(0,100000):
             i=i+1
             self.pipeline_logger.debug(f"current iteration {i}")
 
@@ -117,7 +119,8 @@ class Pipeline():
             frames=self.getFrames()
             if len(frames)==0:
                 self.pipeline_logger.critical("No frames received from source. Shutting down pipeline.")
-                exit(0)  
+                self.visualizer.show_full_map()
+                
             left_frame=frames[0]
             right_frame=frames[1]
             capture_time=int((time.time()-start_time)*1000)
@@ -164,5 +167,5 @@ class Pipeline():
             self.performance_logger.info(f"capture {capture_time}ms | Process {process_time}ms | tracking {tracking_time}ms | depth {depth_time}ms | keyframe {keyframe_time}ms | creat lm {landmarks_time}ms | gui {gui_time}ms")
             
 
-def pipeline_factory( atlas, tracker,depth_estimator,visualizer,camera_map=None):
-    return Pipeline( atlas, tracker,depth_estimator,visualizer,camera_map)
+def pipeline_factory( atlas, tracker,depth_estimator,visualizer,camera_map,optimizer):
+    return Pipeline( atlas, tracker,depth_estimator,visualizer,camera_map,optimizer)

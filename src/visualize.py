@@ -100,6 +100,80 @@ class Visualize:
         self.points[self.ptr:self.ptr+n] = new_pts
         self.colors[self.ptr:self.ptr+n] = new_colors
         self.ptr += n
+    
+
+    def show_full_map(self):
+        active_map = self.atlas.getActiveMap()
+
+        vis = o3d.visualization.Visualizer()
+        vis.create_window(window_name="Full Map Viewer", width=1280, height=800)
+
+        # -----------------------------
+        # 🌍 Landmarks (BLACK)
+        # -----------------------------
+        points = []
+        for lm in active_map.landmarks:
+        
+            if lm is None:
+                continue
+            # print(f"id {lm.id}, isBad {lm.isBad}")
+            if lm.isBad:
+                continue
+            points.append(lm.point3D)
+
+        if len(points) == 0:
+            print("No landmarks to display")
+            return
+
+        points = np.array(points) @ self.R_transform.T
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+        pcd.colors = o3d.utility.Vector3dVector(
+            np.zeros((points.shape[0], 3))
+        )
+
+        vis.add_geometry(pcd)
+
+        # -----------------------------
+        # 📍 Keyframe Trajectory (BLUE)
+        # -----------------------------
+        traj_points = []
+        traj_lines = []
+
+        keyframes = active_map.keyFrames
+
+        for kf in keyframes:
+            T = kf.worldPose   # assuming (R, t) or similar
+            t = np.asarray(T[1]).reshape(3,)
+            traj_points.append(t @ self.R_transform.T)
+
+        for i in range(len(traj_points) - 1):
+            traj_lines.append([i, i+1])
+
+        if len(traj_points) > 1:
+            line_set = o3d.geometry.LineSet()
+            line_set.points = o3d.utility.Vector3dVector(np.array(traj_points))
+            line_set.lines = o3d.utility.Vector2iVector(traj_lines)
+            line_set.colors = o3d.utility.Vector3dVector(
+                [[0, 0, 1]] * len(traj_lines)
+            )
+
+            vis.add_geometry(line_set)
+
+        # -----------------------------
+        # 🎥 Nice View Setup
+        # -----------------------------
+        vis.get_render_option().point_size = 2.0
+        # vis.get_render_option().background_color = np.asarray([1, 1, 1])
+
+        vis.reset_view_point(True)
+
+        # -----------------------------
+        # 🔒 BLOCKING RUN
+        # -----------------------------
+        vis.run()
+        vis.destroy_window()
 
     # ---------------- Update point clouds and trajectory ----------------
     def visualize_as_point_cloud(self, T=None):
@@ -109,7 +183,10 @@ class Visualize:
             aged_points = np.array([lm.point3D for lm in agedFrame.getLandmarks()])
             aged_colors = np.zeros((aged_points.shape[0], 3))  # black
             self.add_points(aged_points, aged_colors)
-
+        
+        aged_points=np.array([lm.point3D for lm in self.atlas.getActiveMap().landmarks])
+        aged_colors = np.zeros((aged_points.shape[0], 3))
+        self.add_points(aged_points, aged_colors) 
         # Update global landmarks
         if self.ptr > 0:
             self.pcd_landmarks.points = o3d.utility.Vector3dVector(self.points[:self.ptr])
