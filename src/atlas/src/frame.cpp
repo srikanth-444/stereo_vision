@@ -219,6 +219,7 @@ bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmark
             if(landmarks[i]->observations.find(wthis) == landmarks[i]->observations.end()){
                 this->landmarks[id]=landmarks[i];
                 // this->landmarks[id]->addObservation(this,id);
+                landmarks[i]->increaseTracked();
                 auto it = std::find(notAssociatedIndices.begin(), notAssociatedIndices.end(), id);
                 if (it != notAssociatedIndices.end()) {
                     notAssociatedIndices.erase(it);
@@ -247,6 +248,7 @@ std::vector<std::shared_ptr<Landmark>>Frame::getVisibleLandmarks(std::vector<std
     for (const auto& lm : landmarks)
     {
         // 1. Viewing angle check
+        
         if (!lm->isVisible(this->cameraCenter, this->cameraNormal))
             continue;
 
@@ -294,6 +296,7 @@ void Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>> landmar
             std::weak_ptr<Frame> wthis = shared_from_this();
             if(landmarks[i]->observations.find(wthis) == landmarks[i]->observations.end()){
                 this->landmarks[id]=landmarks[i];
+                landmarks[i]->increaseTracked();
                 auto it = std::find(notAssociatedIndices.begin(), notAssociatedIndices.end(), id);
                 if (it != notAssociatedIndices.end()) {
                     notAssociatedIndices.erase(it);
@@ -322,6 +325,7 @@ void Frame::match(const std::vector<std::shared_ptr<Landmark>>landmarks, std::ve
             std::weak_ptr<Frame> wthis = shared_from_this();
             if(landmarks[i]->observations.find(wthis) == landmarks[i]->observations.end()){
                 this->landmarks[id]=landmarks[i];
+                landmarks[i]->increaseTracked();
                 auto it = std::find(notAssociatedIndices.begin(), notAssociatedIndices.end(), id);
                 if (it != notAssociatedIndices.end()) {
                     notAssociatedIndices.erase(it);

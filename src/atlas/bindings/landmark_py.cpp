@@ -19,6 +19,7 @@ void bind_landmark(py::module_ &m) {
         .def_readwrite("nVisible", &Landmark::nVisible)
         .def_readwrite("nTracked", &Landmark::nTracked)
         .def_readwrite("projectedpoint",&Landmark::projectedpoint)
+        .def_readwrite("isBad",&Landmark::isBad)
         .def("setNormal",&Landmark::setNormal)
         .def("setReferenceDepth",&Landmark::setReferenceDepth)
         .def("isVisible",&Landmark::isVisible)

@@ -94,7 +94,7 @@ class Tracker():
             c3=np.linalg.norm(T[1]-self.T[1])>0.1
             # c4=no_tracked_landmarks<20
             self.T=frame.worldPose
-            self.path.append(self.T)
+            self.path.append(self.T)         
             return (c1 and c2) and c3 or self.tracking_state=="lost"
     
         

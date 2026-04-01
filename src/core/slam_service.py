@@ -59,8 +59,7 @@ def start_service():
         depth_estimator=Stereo.Stereo(left_camera.intrinsic,left_camera.extrinsic,left_camera.distortion,
                                       right_camera.intrinsic,right_camera.extrinsic,right_camera.distortion,left_camera.W,left_camera.H)
     visualizer=Visualize(atlas)
-    pipeline=pipeline_factory(atlas,tracker,depth_estimator,visualizer,camera_map)
-    
+    pipeline=pipeline_factory(atlas,tracker,depth_estimator,visualizer,camera_map,optimizer)
     logging.info("Starting SLAM pipeline...")
     pipeline.run()
     

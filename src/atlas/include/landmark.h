@@ -22,7 +22,8 @@ class Landmark{
     float refDepth=std::nanf("");
     int nVisible=1;
     int nTracked=0;
-    int isBad;
+    int isBad=false;
+    int bornAt=0;
     Eigen::Vector2f projectedpoint;
 
     Landmark(int id, const Eigen::Vector3f Point3D, std::shared_ptr<Frame> frame, int featureId);
@@ -38,6 +39,7 @@ class Landmark{
     void increaseTracked();
     float getFoundingRatio(); 
     void setBadFlag(); 
+    int getAge(int currentframeid);
 };
 
 #endif

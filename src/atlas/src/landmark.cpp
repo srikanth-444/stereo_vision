@@ -20,9 +20,12 @@ Landmark::Landmark(int id, const Eigen::Vector3f point3D, std::shared_ptr<Frame>
     addObservation(frame, featureId);
     cv::KeyPoint kp=frame->keyPoints[featureId];
     projectedpoint=Eigen::Vector2f(kp.pt.x,kp.pt.y);
+    bornAt=frame->id;
     
 }
-
+int Landmark::getAge(int currentframeid){
+    return currentframeid-bornAt;
+}
 void Landmark::addObservation(std::weak_ptr<Frame> frame, int featureId)
 {
     observations[frame]=featureId;

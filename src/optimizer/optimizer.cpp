@@ -106,111 +106,159 @@ void Optimizer::optimizePose(std::shared_ptr<Frame> frame){
     frame->setCameraWorldPose(q_,t_);
 }
 
-// void Optimizer::localBundleAdjustment(std::shared_ptr<Frame> frame, std::shared_ptr<Map> currentMap) {
-//     optimizer.clear();
-    
-//     auto frames = currentMap->getClosestKeyFrames(frame);
+void Optimizer::localBundleAdjustment(std::shared_ptr<Frame> frame, std::shared_ptr<Map> currentMap) {
+    auto linearSolver = std::make_unique<g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>>();
+    auto solver_ptr = std::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver));
+    auto solver = new g2o::OptimizationAlgorithmLevenberg(std::move(solver_ptr));
+    optimizer.setAlgorithm(solver);
+    optimizer.setVerbose(false);
+    auto frames = currentMap->getClosestKeyFrames(frame);
 
-//     // Collect unique landmarks
-//     std::unordered_set<int> uniqueIds;
-//     std::vector<std::shared_ptr<Landmark>> landmarks;
-//     for (auto& f : frames) {
-//         for (auto& lm : f->getLandmarks()) {
-//             if (uniqueIds.insert(lm->id).second) {
-//                 landmarks.push_back(lm);
-//             }
-//         }
-//     }
+    // Collect unique landmarks
+    std::unordered_set<int> uniqueIds;
+    std::vector<std::shared_ptr<Landmark>> landmarks;
+    for (auto& f : frames) {
+        for (auto& lm : f->getLandmarks()) {
+            if (uniqueIds.insert(lm->id).second) {
+                landmarks.push_back(lm);
+            }
+        }
+    }
 
-//     const int LANDMARK_ID_OFFSET = 1000000;
+    const int LANDMARK_ID_OFFSET = 1000000;
 
-//     std::vector<g2o::EdgeSE3ProjectXYZ*> edges;
-//     edges.reserve(landmarks.size());
+    std::vector<g2o::EdgeSE3ProjectXYZ*> edges;
+    edges.reserve(landmarks.size());
 
-//     for (auto lm : landmarks) {
+    for (auto lm : landmarks) {
         
-//         auto v = new g2o::VertexPointXYZ();
-//         v->setId(lm->id + LANDMARK_ID_OFFSET);  
-//         v->setEstimate(lm->point3D.cast<double>());
-//         v->setFixed(false);
-//         optimizer.addVertex(v);
+        auto v = new g2o::VertexPointXYZ();
+        v->setId(lm->id + LANDMARK_ID_OFFSET);  
+        v->setEstimate(lm->point3D.cast<double>());
+        v->setFixed(false);
+        v->setMarginalized(true);
+        optimizer.addVertex(v);
 
-//         for (const auto& [weakFrame, fid] : lm->observations) {
-//             auto mframe = weakFrame.lock();
-//             if (!mframe) continue;
+        for (const auto& [weakFrame, fid] : lm->observations) {
+            auto mframe = weakFrame.lock();
+            if (!mframe) continue;
 
-//             if (!optimizer.vertex(mframe->id)) {
-//                 auto vertex = new g2o::VertexSE3Expmap();
-//                 vertex->setId(mframe->id);
+            if (!optimizer.vertex(mframe->id)) {
+                auto vertex = new g2o::VertexSE3Expmap();
+                vertex->setId(mframe->id);
 
-//                 Eigen::Matrix3d R = mframe->Tcw.block<3,3>(0,0).cast<double>();
-//                 Eigen::Vector3d t = mframe->Tcw.block<3,1>(0,3).cast<double>();
-//                 Eigen::Quaterniond qd(R);
-//                 qd.normalize();
+                Eigen::Matrix3d R = mframe->Tcw.block<3,3>(0,0).cast<double>();
+                Eigen::Vector3d t = mframe->Tcw.block<3,1>(0,3).cast<double>();
+                Eigen::Quaterniond qd(R);
+                qd.normalize();
             
-//                 vertex->setEstimate(g2o::SE3Quat(qd,t)); 
+                vertex->setEstimate(g2o::SE3Quat(qd,t)); 
 
-//                 bool isLocal = std::find(frames.begin(), frames.end(), mframe) != frames.end();
-//                 vertex->setFixed(!isLocal);
-
-//                 optimizer.addVertex(vertex);  
-//             }
-
-
-//             auto* landmarkVertex = optimizer.vertex(lm->id + LANDMARK_ID_OFFSET); // FIX 1
-//             auto* frameVertex    = optimizer.vertex(mframe->id);
-//             if (!landmarkVertex || !frameVertex) continue;
-
-//             auto edge = new g2o::EdgeSE3ProjectXYZ();
-//             Eigen::Matrix<double, 2, 1> obs;
-//             obs << mframe->keyPoints[fid].pt.x, mframe->keyPoints[fid].pt.y;
-
-//             edge->setVertex(0, landmarkVertex);
-//             edge->setVertex(1, frameVertex);
-//             edge->setMeasurement(obs);
-//             edge->setInformation(Eigen::Matrix2d::Identity());
-//             edge->fx = mframe->intrinsic(0, 0);
-//             edge->fy = mframe->intrinsic(1, 1);
-//             edge->cx = mframe->intrinsic(0, 2);
-//             edge->cy = mframe->intrinsic(1, 2);
-
-//             g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
-//             edge->setRobustKernel(rk);
-//             rk->setDelta(std::sqrt(5.991));
-
-//             optimizer.addEdge(edge);
-//             edges.emplace_back(edge);
-//         }
-//     }
+                bool isLocal = std::find(frames.begin(), frames.end(), mframe) != frames.end();
+                vertex->setFixed(!isLocal);
+                optimizer.addVertex(vertex);  
+            }
 
 
-//     const int max_iterations = 4; 
-//     for(int iter = 0; iter < max_iterations; ++iter){
+            auto* landmarkVertex = optimizer.vertex(lm->id + LANDMARK_ID_OFFSET); // FIX 1
+            auto* frameVertex    = optimizer.vertex(mframe->id);
+            if (!landmarkVertex || !frameVertex) continue;
 
-//         optimizer.initializeOptimization(0);
+            auto edge = new g2o::EdgeSE3ProjectXYZ();
+            Eigen::Matrix<double, 2, 1> obs;
+            obs << mframe->keyPoints[fid].pt.x, mframe->keyPoints[fid].pt.y;
+
+            edge->setVertex(0, landmarkVertex);
+            edge->setVertex(1, frameVertex);
+            edge->setMeasurement(obs);
+            edge->setInformation(Eigen::Matrix2d::Identity());
+            edge->fx = mframe->intrinsic(0, 0);
+            edge->fy = mframe->intrinsic(1, 1);
+            edge->cx = mframe->intrinsic(0, 2);
+            edge->cy = mframe->intrinsic(1, 2);
+
+            g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+            edge->setRobustKernel(rk);
+            rk->setDelta(std::sqrt(5.991));
+
+            optimizer.addEdge(edge);
+            edges.emplace_back(edge);
+        }
+    }
+
+
+    const int max_iterations = 4; 
+    for(int iter = 0; iter < max_iterations; ++iter){
+
+        optimizer.initializeOptimization(0);
     
-//         optimizer.optimize(5); 
+        optimizer.optimize(5); 
 
-//         int active_count = 0;
+        int active_count = 0;
 
-//         for(auto* edge : edges) {
-//                 edge->computeError(); 
-//                 double error = edge->chi2();
+        for(auto* edge : edges) {
+                edge->computeError(); 
+                double error = edge->chi2();
 
-//                 if(error > 5.991) { 
-//                     edge->setLevel(1); 
-//                 }
-//                 else {
-//                     edge->setLevel(0); 
-//                     active_count++;
-//                 }
-//             }
+                if(error > 5.991) { 
+                    edge->setLevel(1); 
+                }
+                else {
+                    edge->setLevel(0); 
+                    active_count++;
+                }
+            }
 
-//             if(active_count < 10) {
-//                 std::cout << "Optimization stopped: too few inliers." << std::endl;
-//                 break;
-//             }
-//     }
+            if(active_count < 10) {
+                std::cout << "Optimization stopped: too few inliers." << std::endl;
+                break;
+            }
+    }
 
-// }
+    std::unordered_map<int, double> landmarkError;
+    std::unordered_map<int, int> landmarkObsCount;
+    int bad=0;
+    for(auto* edge : edges){
+        edge->computeError();
+        double error = edge->chi2();
+
+        auto* v = static_cast<g2o::VertexPointXYZ*>(edge->vertex(0));
+        int lm_id = v->id() - LANDMARK_ID_OFFSET;
+
+        landmarkError[lm_id] += error;
+        landmarkObsCount[lm_id]++;
+    }
+    for(auto& lm : landmarks){
+        int id = lm->id;
+
+        double avgError = landmarkError[id] / landmarkObsCount[id];
+        auto age= lm->getAge(frame->id);
+        if(age>6){
+            if((avgError > 5.991)||landmarkObsCount[id]<2){
+                lm->setBadFlag();
+                bad++;
+                for(auto [frame, fid] : lm->observations){
+                    if(auto f = frame.lock()){
+                        f->landmarks[fid].reset();
+                    }
+                }
+                lm->erase();
+            }
+        }
+        else{
+            if(avgError > 5.991){
+                lm->setBadFlag();
+                bad++;
+                for(auto [frame, fid] : lm->observations){
+                    if(auto f = frame.lock()){
+                        f->landmarks[fid].reset();
+                    }
+                }
+                lm->erase();
+            }
+        }
+    }
+
+
+}
 

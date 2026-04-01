@@ -21,8 +21,9 @@ std::vector<std::shared_ptr<Landmark>> Map::createLandmarks(Eigen::MatrixXf& obj
 void Map::removeBadLandmarks(std::vector<std::shared_ptr<Landmark>> landmarks){
     for(int i=0; i<landmarks.size();i++){
         if(landmarks[i]->isBad) continue;
+        // std::cout<<"ladmark id: "<<landmarks[i]->id<<", Ratio"<<landmarks[i]->getFoundingRatio()<<std::endl;
         if (landmarks[i]->getFoundingRatio()<0.25 || landmarks[i]->nTracked<2){
-            landmarks[i]->isBad=true;
+            landmarks[i]->setBadFlag();
             for(auto [frame,featureId]:landmarks[i]->observations){
                     frame.lock()->landmarks[featureId].reset();
             }
@@ -30,6 +31,7 @@ void Map::removeBadLandmarks(std::vector<std::shared_ptr<Landmark>> landmarks){
         }
     }
 }
+
 
 void Map::mergeLandmarks(std::unordered_map<std::shared_ptr<Landmark>, std::vector<std::shared_ptr<Landmark>>>& mergers)
 {
