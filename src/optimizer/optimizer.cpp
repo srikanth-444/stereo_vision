@@ -234,7 +234,7 @@ void Optimizer::localBundleAdjustment(std::shared_ptr<Frame> frame, std::shared_
         double avgError = landmarkError[id] / landmarkObsCount[id];
         auto age= lm->getAge(frame->id);
         if(age>6){
-            if((avgError > 5.991)||landmarkObsCount[id]<2){
+            if((avgError > 5.991)||landmarkObsCount[id]<3){
                 lm->setBadFlag();
                 bad++;
                 for(auto [frame, fid] : lm->observations){

@@ -12,6 +12,7 @@ sensors:
       interface:
         type: "csv_reader"
         path: "/home/srikanth/machine_hall/machine_hall/MH_01_easy/MH_01_easy/mav0/cam1/data.csv"  # Path to the CSV file containing camera data
+        # path: "/home/srikanth/machine_hall/machine_hall/MH_03_medium/mav0/cam1/data.csv"
       rate_hz: 20
       resolution: [752, 480]
       camera_model: pinhole
@@ -27,17 +28,12 @@ sensors:
       interface:
         type: "csv_reader"
         path: "/home/srikanth/machine_hall/machine_hall/MH_01_easy/MH_01_easy/mav0/cam0/data.csv"  # Path to the CSV file containing camera data  
+        # path: "/home/srikanth/machine_hall/machine_hall/MH_03_medium/mav0/cam1/data.csv"
       rate_hz: 20
       resolution: [752, 480]
       camera_model: pinhole
 
  
-
-  
-
-
-
-
 
 pipe_line:
 
