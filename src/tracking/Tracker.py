@@ -87,7 +87,7 @@ class Tracker():
             
             no_tracked_landmarks=len(frame.getTrackedPoints())
             self.tracker_logger.debug(f"no of tracked landmarks{no_tracked_landmarks}")
-            c1=no_tracked_landmarks<frame.nVisible*0.25
+            c1=no_tracked_landmarks<frame.nVisible*0.7
             c2=(frame.id-self.currentMap.getLastKeyFrame().id)>6
             mframe=self.currentMap.getLastKeyFrame()
             T=mframe.worldPose
