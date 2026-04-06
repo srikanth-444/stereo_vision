@@ -1,17 +1,13 @@
-<h1 align="center">🧠 PerceptionLab</h1>
+# 🧠 PerceptionLab
 
-<p align="center">
-  <b>A modular, plug-and-play perception pipeline for robotics and computer vision research.</b><br/>
-  Build your own SLAM system — swap components, target any device.
-</p>
+![Status](https://img.shields.io/badge/status-WIP-orange?style=flat-square)
+![C++](https://img.shields.io/badge/C%2B%2B-17-blue?style=flat-square&logo=cplusplus)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.8%2B-green?style=flat-square&logo=opencv)
+![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/status-WIP-orange?style=flat-square" />
-  <img src="https://img.shields.io/badge/C%2B%2B-17-blue?style=flat-square&logo=cplusplus" />
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python" />
-  <img src="https://img.shields.io/badge/OpenCV-4.8%2B-green?style=flat-square&logo=opencv" />
-  <img src="https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square" />
-</p>
+> **Build your own SLAM system — swap components, target any device.**
+> A modular, plug-and-play perception pipeline for robotics and computer vision research.
 
 ---
 
@@ -27,13 +23,13 @@
 
 | Module | Description |
 |---|---|
-| 🔍 **Feature Extraction** | Supports ORB, SIFT, SuperPoint, and custom extractors |
-| 📐 **Nonlinear Optimization** | Integrated with **g2o**; designed to support Ceres & GTSAM |
-| 🎯 **Visual Tracking** | Descriptor-based tracker with configurable reprojection error & confidence |
-| 📏 **Depth Estimation** | Stereo depth estimator with configurable camera IDs |
-| 🗺️ **Map Management** | Atlas-style map with keyframe decisions and local bundle adjustment |
-| ⚙️ **Config-Driven** | Fully YAML-configurable sensors, pipeline, and algorithm parameters |
-| 🔗 **Python + C++ Hybrid** | C++ core with Python bindings via pybind11 |
+| 🔍 Feature Extraction | Supports ORB, SIFT, SuperPoint, and custom extractors |
+| 📐 Nonlinear Optimization | Integrated with [g2o](https://github.com/RainerKuemmerle/g2o); designed to support Ceres & GTSAM |
+| 🎯 Visual Tracking | Descriptor-based tracker with configurable reprojection error & confidence |
+| 📏 Depth Estimation | Stereo depth estimator with configurable camera IDs |
+| 🗺️ Map Management | Atlas-style map with keyframe decisions and local bundle adjustment |
+| ⚙️ Config-Driven | Fully YAML-configurable sensors, pipeline, and algorithm parameters |
+| 🔗 Python + C++ Hybrid | C++ core with Python bindings via pybind11 |
 
 ---
 
@@ -41,24 +37,24 @@
 ```
 PerceptionLab/
 ├── src/
-│   ├── atlas/              # Map management & keyframe storage
-│   ├── core/               # Core SLAM logic
-│   ├── config/             # Config loading & validation
-│   ├── depth_estimator/    # Stereo / depth estimation modules
-│   ├── feature_extractor/  # ORB, SIFT, SuperPoint, etc.
-│   ├── interfaces/         # Sensor interfaces (CSV reader, etc.)
-│   ├── motion_model/       # Motion prediction models
-│   ├── optimizer/          # g2o-based graph optimization
-│   ├── pipeline/           # Main pipeline orchestration
-│   ├── sensors/            # Camera sensor abstraction
-│   ├── tracking/           # Feature tracking & pose estimation
-│   ├── utils/              # Shared utilities
-│   └── visualize.py        # Trajectory & map visualization
-├── test/                   # Unit & integration tests
-├── config.yaml             # Pipeline configuration
-├── CMakeLists.txt          # C++ build configuration
-├── build.sh                # Build script
-└── requirements.txt        # Python dependencies
+│   ├── atlas/             # Map management & keyframe storage
+│   ├── core/              # Core SLAM logic
+│   ├── config/            # Config loading & validation
+│   ├── depth_estimator/   # Stereo / depth estimation modules
+│   ├── feature_extractor/ # ORB, SIFT, SuperPoint, etc.
+│   ├── interfaces/        # Sensor interfaces (CSV reader, etc.)
+│   ├── motion_model/      # Motion prediction models
+│   ├── optimizer/         # g2o-based graph optimization
+│   ├── pipeline/          # Main pipeline orchestration
+│   ├── sensors/           # Camera sensor abstraction
+│   ├── tracking/          # Feature tracking & pose estimation
+│   ├── utils/             # Shared utilities
+│   └── visualize.py       # Trajectory & map visualization
+├── test/                  # Unit & integration tests
+├── config.yaml            # Pipeline configuration
+├── CMakeLists.txt         # C++ build configuration
+├── build.sh               # Build script
+└── requirements.txt       # Python dependencies
 ```
 
 ---
@@ -78,7 +74,7 @@ pip install -r requirements.txt
 
 ### 3. Configure the C++ build
 
-Open `CMakeLists.txt` and update the path to your local **g2o** installation:
+Open `CMakeLists.txt` and update the path to your local `g2o` installation:
 ```cmake
 # Example — update this to match your system
 set(g2o_DIR "/path/to/your/g2o/lib/cmake/g2o")
@@ -125,6 +121,7 @@ pipe_line:
 ## 📦 Dependencies
 
 ### Python
+
 | Package | Version |
 |---|---|
 | numpy | >= 1.26.0 |
@@ -135,6 +132,7 @@ pipe_line:
 | scikit-learn | >= 1.3.0 |
 
 ### System / C++
+
 - C++17 compatible compiler (GCC 10+ or Clang 12+)
 - OpenCV >= 4.8
 - Eigen >= 3.4
@@ -165,10 +163,86 @@ Contributions are welcome! Feel free to open issues or pull requests to suggest 
 
 ---
 
+## 📄 License
+
+This project is licensed under the **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for details.
+
+This project is inspired by and partially based on:
+- [ORB-SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3) — Campos et al., GPLv3 — for the Atlas map management design, tracking pipeline, and local bundle adjustment concepts.
+- [g2o](https://github.com/RainerKuemmerle/g2o) — BSD License — used for graph-based nonlinear optimization.
+
+---
+
 ## 👤 Author
 
 **srikanth-444** — [@srikanth-444](https://github.com/srikanth-444)
 
+⭐ Star this repo if you find it useful!
+```
+
 ---
 
-<p align="center">⭐ Star this repo if you find it useful!</p>
+## 📄 `LICENSE` (new file — GPLv3)
+```
+                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2026 srikanth-444
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+                            Preamble
+
+  The GNU General Public License is a free, copyleft license for
+software and other kinds of works.
+
+  When we speak of free software, we are referring to freedom, not
+price. Our General Public Licenses are designed to make sure that you
+have the freedom to share and change all versions of a program--to
+make sure it remains free software for all its users.
+
+  To protect your rights, we need to prevent others from denying you
+these rights or asking you to surrender the rights. Therefore, you
+have certain responsibilities if you distribute copies of the
+software, or if you modify it: responsibilities to respect the
+freedom of others.
+
+  For the full terms and conditions, see:
+  https://www.gnu.org/licenses/gpl-3.0.txt
+
+--------------------------------------------------------------------------------
+
+PerceptionLab — Copyright (C) 2026 srikanth-444
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+--------------------------------------------------------------------------------
+
+THIRD-PARTY ATTRIBUTIONS
+
+This project is inspired by and partially based upon the following works:
+
+1. ORB-SLAM3
+   Authors: Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
+            José M. M. Montiel, Juan D. Tardós
+   Repository: https://github.com/UZ-SLAMLab/ORB_SLAM3
+   License: GNU General Public License v3.0
+   Used for: Atlas-style map management design, visual tracking pipeline
+             architecture, and local bundle adjustment concepts.
+
+2. g2o — General Graph Optimization
+   Authors: Rainer Kümmerle et al.
+   Repository: https://github.com/RainerKuemmerle/g2o
+   License: BSD License
+   Used for: Graph-based nonlinear optimization backend.
