@@ -178,7 +178,5 @@ This project is inspired by and partially based on:
 **srikanth-444** — [@srikanth-444](https://github.com/srikanth-444)
 
 ⭐ Star this repo if you find it useful!
-```
 
----
 
