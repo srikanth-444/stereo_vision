@@ -1,3 +1,5 @@
+#ifndef OPTIMIZER_H
+#define OPTIMIZER_H
 #include <g2o/core/sparse_optimizer.h>
 #include <g2o/core/block_solver.h>
 #include <g2o/core/optimization_algorithm_levenberg.h>
@@ -8,14 +10,17 @@
 #include "frame.h"
 #include "landmark.h"
 #include "map.h"
+#include "edges.h"
+#include <shared_mutex>
 
 class Optimizer{
     public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    g2o::SparseOptimizer optimizer;
+    g2o::SparseOptimizer poseoptimizer;
+    bool verbose;
     Optimizer(bool verbose);
-    void optimizePose(std::shared_ptr<Frame> frame);
+    bool optimizePose(std::shared_ptr<Frame> frame);
     void optimizeBundle(std::vector<std::shared_ptr<Frame>>frame);
-    void localBundleAdjustment(std::shared_ptr<Frame> frame, std::shared_ptr<Map>currentMap);
+    void localBundleAdjustment(std::shared_ptr<Frame> frame);
 };
-
+#endif

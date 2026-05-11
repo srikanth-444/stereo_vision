@@ -3,7 +3,6 @@
 
 namespace py = pybind11;
 
-// forward declarations
 void bind_orb(py::module_ &m);
 
 

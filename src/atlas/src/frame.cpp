@@ -4,7 +4,7 @@
 #include <numeric>
 #include <iostream>
 
-Frame::Frame(int id, cv::Mat& image, int64_t timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic,Eigen::Vector4f dist_coefficents,FeatureExtractor* featureExtractor): 
+Frame::Frame(int id, cv::Mat& image, int64_t timeStamp, Eigen::Matrix3f intrinsic,Eigen::Matrix4f extrinsic,Eigen::Vector4f dist_coefficents,std::shared_ptr<FeatureExtractor> featureExtractor): 
 id(id),image(image),timeStamp(timeStamp), intrinsic(intrinsic), extrinsic(extrinsic),dist_coefficents(dist_coefficents), featureExtractor(featureExtractor){
 }
 
@@ -14,6 +14,7 @@ Eigen::Vector3f Frame::getCameraCenter()const{
     }
     return cameraCenter;
 }
+
 void Frame::addKeyPointsToGrid()
 {
     // Grid parameters
@@ -35,10 +36,12 @@ void Frame::addKeyPointsToGrid()
         grid[c][r].push_back(i);
     }
 }
+
 std::vector<int> Frame::getNotAssociatedIndices()const{
     return notAssociatedIndices;
                 
 }
+
 Eigen::MatrixXf Frame::getNotAssociatedPoints()const{
     Eigen::MatrixXf result(notAssociatedIndices.size(), 2);
     int row = 0;
@@ -50,6 +53,7 @@ Eigen::MatrixXf Frame::getNotAssociatedPoints()const{
     }
     return result.topRows(row); 
 }
+
 std::vector<cv::KeyPoint> Frame::getNotAssociatedKeyPoints()const{
     std::vector<cv::KeyPoint> result;
     result.reserve(notAssociatedIndices.size());
@@ -61,6 +65,7 @@ std::vector<cv::KeyPoint> Frame::getNotAssociatedKeyPoints()const{
     }
     return result; 
 }
+
 cv::Mat Frame::getNotAssociatedDescriptors()const{
     
     cv::Mat result(notAssociatedIndices.size(), descriptors.cols, descriptors.type());
@@ -74,6 +79,7 @@ cv::Mat Frame::getNotAssociatedDescriptors()const{
     }
     return result;
 }
+
 std::vector<std::shared_ptr<Landmark>> Frame::getLandmarks()const{
     std::vector<std::shared_ptr<Landmark>> result;
     result.reserve(landmarks.size());
@@ -118,6 +124,7 @@ void Frame::updateCovisibility(){
     for(int i=0; i<landmarks.size(); i++){
         auto lm=landmarks[i].lock();
         if(lm){
+            std::shared_lock lock(lm->landmarkMutex);
             for(auto [frameptr,featureId]:lm->observations){
                 // std::cout<<frameptr<<std::endl;
                 std::shared_ptr<Frame> wthis = shared_from_this();
@@ -133,11 +140,11 @@ void Frame::updateCovisibility(){
 }
 
 void Frame::setCameraWorldPose(Eigen::Quaternionf q,Eigen::Vector3f t){
+    q.normalize();
     this->q=q;
     this->t=t;
-    q.normalize();
+    
     auto R=q.toRotationMatrix();
-    Eigen::Matrix4f Twr = Eigen::Matrix4f::Identity();
     Twr.block<3,3>(0,0)=R;
     Twr.block<3,1>(0,3)=t;
     Eigen::Matrix4f Twc = Twr * extrinsic;
@@ -153,6 +160,10 @@ void Frame::setCameraWorldPose(Eigen::Quaternionf q,Eigen::Vector3f t){
     this->Tcw.setIdentity();
     this->Tcw.block<3,3>(0,0) = Rcw;
     this->Tcw.block<3,1>(0,3) = tcw;
+}
+
+void Frame::setStereoFrame(std::shared_ptr<Frame> frame){
+    this->rFrame=frame;
 }
 
 std::vector<int> Frame::GetFeaturesInArea(float x, float y, float r)
@@ -181,7 +192,6 @@ std::vector<int> Frame::GetFeaturesInArea(float x, float y, float r)
     return vIndices;
 }
 
-
 Eigen::MatrixXf Frame::projectPoints(Eigen::MatrixXf& objectPoints){
     int N=objectPoints.cols();
     Eigen::MatrixXf imagePoints(N,2);
@@ -194,6 +204,43 @@ Eigen::MatrixXf Frame::projectPoints(Eigen::MatrixXf& objectPoints){
     return imagePoints;
 
 }
+
+std::vector<std::shared_ptr<Landmark>>Frame::getVisibleLandmarks(std::vector<std::shared_ptr<Landmark>>& landmarks)
+{
+    std::vector<std::shared_ptr<Landmark>> newLandmarks;
+    newLandmarks.reserve(landmarks.size());
+
+    Eigen::Matrix3f Rcw = (Tcw.block<3,3>(0,0)).eval();
+    Eigen::Vector3f tcw = (Tcw.block<3,1>(0,3)).eval();
+
+    for (const auto& lm : landmarks)
+    {   
+        std::unique_lock lock(lm->landmarkMutex);
+        if (lm->isBad)continue;
+        if (!lm->isVisible(this->cameraCenter, this->cameraNormal))
+            continue;
+
+        Eigen::Vector3f p = Rcw * lm->point3D + tcw;
+
+        if (p[2] <= 0)
+            continue;
+
+        Eigen::Vector3f proj = this->intrinsic * p;
+        proj /= proj[2];
+
+        float u = proj[0];
+        float v = proj[1];
+        if (u < 0 || u >= image.cols || v < 0 || v >= image.rows)
+            continue;
+        lm->projectedpoint = proj.head<2>();
+        lm->increaseVisible();
+        newLandmarks.emplace_back(lm);
+    }
+
+    nVisible = newLandmarks.size();
+    return newLandmarks;
+}
+
 bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints,int r){
     // std::cout<<"entered the main function"<<std::endl;
     // cv::Mat debugImg;
@@ -205,9 +252,13 @@ bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmark
     // for(auto pts:keyPoints){
     //     cv::circle(debugImg, pts.pt, 2, cv::Scalar(0,255,0), -1);
     // }
+
+    
+  
     Eigen::MatrixXf objectPoints(4,landmarks.size());
     for(int i=0; i<landmarks.size();i++)
-    {
+    {   
+        std::shared_lock lock(landmarks[i]->landmarkMutex);
         float u = landmarks[i]->projectedpoint(0);
         float v = landmarks[i]->projectedpoint(1);
         // cv::circle(debugImg, cv::Point2f(u, v), 2, cv::Scalar(255,0,0), -1);
@@ -217,8 +268,10 @@ bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmark
         if(!this->landmarks[id].lock()){
             std::weak_ptr<Frame> wthis = shared_from_this();
             if(landmarks[i]->observations.find(wthis) == landmarks[i]->observations.end()){
-                this->landmarks[id]=landmarks[i];
-                // this->landmarks[id]->addObservation(this,id);
+                {
+                    std::unique_lock lock(frameMutex);
+                    this->landmarks[id]=landmarks[i];
+                }
                 landmarks[i]->increaseTracked();
                 auto it = std::find(notAssociatedIndices.begin(), notAssociatedIndices.end(), id);
                 if (it != notAssociatedIndices.end()) {
@@ -233,69 +286,26 @@ bool Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>>landmark
     }
     // cv::imshow("Projection Matches", debugImg);
     // cv::waitKey(0);
-    if(mObjectPoints.size()<8)return false;
-    
+    if(mObjectPoints.size()<8)return false; 
     return true;
-}
-std::vector<std::shared_ptr<Landmark>>Frame::getVisibleLandmarks(std::vector<std::shared_ptr<Landmark>>& landmarks)
-{
-    std::vector<std::shared_ptr<Landmark>> newLandmarks;
-    newLandmarks.reserve(landmarks.size());
-
-    Eigen::Matrix3f Rcw = (Tcw.block<3,3>(0,0)).eval();
-    Eigen::Vector3f tcw = (Tcw.block<3,1>(0,3)).eval();
-
-    for (const auto& lm : landmarks)
-    {
-        // 1. Viewing angle check
-        
-        if (!lm->isVisible(this->cameraCenter, this->cameraNormal))
-            continue;
-
-        // 2. Transform to camera frame
-        Eigen::Vector3f p = Rcw * lm->point3D + tcw;
-
-        // 3. Depth check
-        if (p[2] <= 0)
-            continue;
-
-        // 4. Projection
-        Eigen::Vector3f proj = this->intrinsic * p;
-        proj /= proj[2];
-
-        float u = proj[0];
-        float v = proj[1];
-
-        // 5. Image bounds check
-        if (u < 0 || u >= image.cols || v < 0 || v >= image.rows)
-            continue;
-
-        // 6. Store result
-        lm->projectedpoint = proj.head<2>();
-        lm->increaseVisible();
-        newLandmarks.emplace_back(lm);
-    }
-
-    nVisible = newLandmarks.size();
-    return newLandmarks;
 }
 
 void Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>> landmarks){
     Eigen::MatrixXf objectPoints(4,landmarks.size());
-
-    
     for(int i=0; i<landmarks.size();i++){
-    
+        std::shared_lock lock(landmarks[i]->landmarkMutex);
         float u = landmarks[i]->projectedpoint(0);
         float v = landmarks[i]->projectedpoint(1);
-        // std::cout<<"u: "<<u<<"v: "<<v<<std::endl;
         auto idx=GetFeaturesInArea(u,v,50);
         int id=featureExtractor->match(landmarks[i]->descriptor,descriptors,idx,0.9);
         if(id==-1) continue;
         if(!this->landmarks[id].lock()){
             std::weak_ptr<Frame> wthis = shared_from_this();
             if(landmarks[i]->observations.find(wthis) == landmarks[i]->observations.end()){
-                this->landmarks[id]=landmarks[i];
+                {   
+                    std::unique_lock lock(frameMutex);
+                    this->landmarks[id]=landmarks[i];
+                }
                 landmarks[i]->increaseTracked();
                 auto it = std::find(notAssociatedIndices.begin(), notAssociatedIndices.end(), id);
                 if (it != notAssociatedIndices.end()) {
@@ -305,14 +315,18 @@ void Frame::projectionMatch(const std::vector<std::shared_ptr<Landmark>> landmar
         }
         else{
             if (this->landmarks[id].lock() && this->landmarks[id].lock() ==landmarks[i]) continue;
-            mergers[this->landmarks[id].lock()].push_back(landmarks[i]);
-            
+            {   
+                std::unique_lock lock(frameMutex);
+                mergers[this->landmarks[id].lock()].push_back(landmarks[i]);
+            }
         }
     }
     
 }
-void Frame::match(const std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints){
 
+void Frame::match(const std::vector<std::shared_ptr<Landmark>>landmarks, std::vector<cv::Point3f>& mObjectPoints, std::vector<cv::Point2f>& mImagePoints){
+    
+    std::unique_lock lock(frameMutex);
     std::vector<int> idx;
     idx.resize(descriptors.rows);
     std::iota(idx.begin(), idx.end(),0);
@@ -342,6 +356,6 @@ void Frame::extractFeatures(){
     (*featureExtractor)(image, cv::noArray(), keyPoints, descriptors, lap_area);
     landmarks.resize(keyPoints.size());
     notAssociatedIndices.resize(keyPoints.size());
-    std::iota(notAssociatedIndices.begin(), notAssociatedIndices.end(), 0); // fill 0..N-1
+    std::iota(notAssociatedIndices.begin(), notAssociatedIndices.end(), 0);
     addKeyPointsToGrid();
 }

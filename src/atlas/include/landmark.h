@@ -5,6 +5,7 @@
 #include "utils.h"
 #include <opencv2/core/core.hpp>
 #include <cstdint>
+#include <shared_mutex>
 
 
 
@@ -25,6 +26,7 @@ class Landmark{
     int isBad=false;
     int bornAt=0;
     Eigen::Vector2f projectedpoint;
+    std::shared_mutex landmarkMutex;
 
     Landmark(int id, const Eigen::Vector3f Point3D, std::shared_ptr<Frame> frame, int featureId);
     void setNormal(const Eigen::Vector3f& cameraCenter);

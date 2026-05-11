@@ -1,29 +1,12 @@
-from abc import ABC, abstractmethod
+def camera_interface_factory(config, queue_size):
 
-class interface(ABC):
-    def __init__(self):
-        pass
-
-    @abstractmethod
-    def read_frame(self):
-        pass
-    @abstractmethod
-    def release(self):
-        pass
-
-def interface_factory(config):
-    if config.get('type',{})=='video_playback':
-        from .video_playback import VideoPlayback
-        return VideoPlayback(config.get('path',{}))
     if config.get('type',{})=='csv_reader':
-        from .csv_reader import CSVReader
-        return CSVReader(config.get('path',{}))
-    if config.get('type',{})=='camera_usb':
-        from .camera_usb import CameraUSB
-        camera_idx = config.get('path',{})
-        width = config.get('width',{})
-        height = config.get('height',{})
-        fps = config.get('fps',{})
-        return CameraUSB(camera_idx, width, height, fps)
+        from ..interfaces.Interface import CameraCSVSource   
+        return CameraCSVSource(config.get('path',{}), queue_size)
     raise ValueError(f"Unknown interface type: {config['interface']['type']}")
     
+def imu_interface_factory(config):
+    if config.get('type',{})=='csv_reader':
+        from ..interfaces.Interface import ImuCSVSource  
+        return ImuCSVSource(config.get('path',{}))
+    raise ValueError(f"Unknown interface type: {config['interface']['type']}")

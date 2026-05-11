@@ -32,6 +32,16 @@ sensors:
       rate_hz: 20
       resolution: [752, 480]
       camera_model: pinhole
+  imu:
+    interface:
+      type: "csv_reader"
+      path: "/home/srikanth/machine_hall/machine_hall/MH_01_easy/MH_01_easy/mav0/imu0/data.csv"
+    rate_hz: 200
+    noise:
+      gyro_noise_density: 1.6968e-04
+      accel_noise_density: 2.0000e-03
+      gyro_bias_rw: 1.9393e-05
+      accel_bias_rw: 3.0000e-03
 
  
 

@@ -1,4 +1,5 @@
-target_sources(slam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/optimizer.cpp)
+target_sources(slam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/optimizer.cpp
+${CMAKE_CURRENT_SOURCE_DIR}/edges.cpp)
 
 target_include_directories(slam PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

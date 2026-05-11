@@ -24,4 +24,4 @@ echo "--- Build Successful! ---"
 
 echo "--- Initiating Smoke Tests"
 export LD_LIBRARY_PATH=/usr/lib:/usr/local/lib:$LD_LIBRARY_PATH
-pytest -v
+python3 -m pytest test/test_smoke.py -v

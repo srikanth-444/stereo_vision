@@ -1,5 +1,6 @@
 #include <pybind11/pybind11.h>
 #include "atlas.h"
+#include "optimizer.h"
 
 namespace py = pybind11;
 
@@ -14,7 +15,7 @@ PYBIND11_MODULE(Atlas, m) {
     bind_landmark(m);
     bind_map(m);
     py::class_<Atlas, std::shared_ptr<Atlas>>(m,"Atlas")
-        .def(py::init<>())
+        .def(py::init<Optimizer*>())
         .def("initiateNewMap",&Atlas::initiateNewMap)
         .def("getActiveMap",&Atlas::getActiveMap);
 }

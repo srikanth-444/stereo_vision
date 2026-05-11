@@ -1,14 +1,15 @@
 #include "map.h"
+#include "optimizer.h"
 #include <iostream>
 
-Map::Map(){}
-
+Map::Map(Optimizer* opt) : optimizer(opt) {}
 std::vector<std::shared_ptr<Landmark>> Map::createLandmarks(Eigen::MatrixXf& objectPoints, std::shared_ptr<Frame> frame, const std::vector<int>&featureIds){
     
     std::vector<std::shared_ptr<Landmark>> landmarks;
     auto R=frame->q.toRotationMatrix();
     for(int i = 0; i < objectPoints.rows(); i++){
     Eigen::Vector3f vec =R* objectPoints.row(i).transpose() + frame->t;
+
     auto lm = std::make_shared<Landmark>(landmarkCounter, vec, frame, featureIds[i]);
     landmarkCounter++;
     landmarks.push_back(lm);
@@ -17,7 +18,6 @@ std::vector<std::shared_ptr<Landmark>> Map::createLandmarks(Eigen::MatrixXf& obj
     }
     return landmarks;
 }
-
 void Map::removeBadLandmarks(std::vector<std::shared_ptr<Landmark>> landmarks){
     for(int i=0; i<landmarks.size();i++){
         if(landmarks[i]->isBad) continue;
@@ -31,8 +31,6 @@ void Map::removeBadLandmarks(std::vector<std::shared_ptr<Landmark>> landmarks){
         }
     }
 }
-
-
 void Map::mergeLandmarks(std::unordered_map<std::shared_ptr<Landmark>, std::vector<std::shared_ptr<Landmark>>>& mergers)
 {
     for (auto& [lm1, duplicates] : mergers)
@@ -68,7 +66,6 @@ void Map::mergeLandmarks(std::unordered_map<std::shared_ptr<Landmark>, std::vect
         }
     }
 }
-
 void Map::setKeyframe(std::shared_ptr<Frame> frame){
     frame->keyFrame=true;  
     for(int i=0; i<frame->landmarks.size(); i++){
@@ -76,21 +73,18 @@ void Map::setKeyframe(std::shared_ptr<Frame> frame){
          if(!lm)continue;
          lm->addObservation(frame, i);
     }
-    keyFrames.push_back(frame);
+    keyFrames.push_back(frame); 
 }
-
 std::shared_ptr<Frame> Map::getLastKeyFrame(){
     if(!keyFrames.empty())return keyFrames.back();
     throw std::invalid_argument("KeyFrames list is empty");
 }
-
 std::shared_ptr<Frame> Map::getAgedFrame(int age){
        if (age <= 0 || age >= keyFrames.size()) {
         return nullptr;
     }
     return keyFrames[keyFrames.size() - age];
 }
-
 std::vector<std::shared_ptr<Frame>> Map::getClosestKeyFrames(const std::shared_ptr<Frame> frame, int N){
     std::vector<std::shared_ptr<Frame>> result;
     result.reserve(N);
@@ -112,7 +106,6 @@ std::vector<std::shared_ptr<Landmark>> Map::getLocalMap(const std::shared_ptr<Fr
             landmarks.push_back(lm);
         }
     }
-
     // Keyframe landmarks
     auto frames = getClosestKeyFrames(frame);
     for (auto& f : frames) {
@@ -128,4 +121,34 @@ std::vector<std::shared_ptr<Landmark>> Map::getLocalMap(const std::shared_ptr<Fr
 }
 int Map::getLengthKeyFrame(){
     return keyFrames.size();
+}
+void Map::mapping(std::shared_ptr<Frame> frame,std::vector<std::shared_ptr<Landmark>>& newLandmarks){
+    {
+        
+        auto mframes=getClosestKeyFrames(frame);
+        for(auto f:mframes){
+            f->projectionMatch(newLandmarks);
+            std::unordered_map<std::shared_ptr<Landmark>, std::vector<std::shared_ptr<Landmark>>> mergers;
+            {
+                std::shared_lock lock(f->frameMutex);
+                mergers = f->mergers;
+            }
+            mergeLandmarks(f->mergers);
+        }
+        auto landmarks= getLocalMap(frame);
+        frame->projectionMatch(landmarks);
+        std::unordered_map<std::shared_ptr<Landmark>, std::vector<std::shared_ptr<Landmark>>> mergers;
+        {
+            std::shared_lock lock(frame->frameMutex);
+            mergers = frame->mergers;
+        }
+        mergeLandmarks(mergers);
+        frame->updateCovisibility();
+    }
+    // std::cout<<"frame covisibility updated"<<std::endl;
+    auto length_of_keyframes=getLengthKeyFrame();
+    if(length_of_keyframes>5){
+        // std::cout<<"local bundle adjustment started"<<std::endl;
+        optimizer->localBundleAdjustment(frame);
+    }
 }

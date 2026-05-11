@@ -4,11 +4,12 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <pybind11/stl.h>
+#include "optimizer.h"
 
 namespace py = pybind11;
 void bind_map(py::module_ &m) {
     py::class_<Map,std::shared_ptr<Map>>(m,"Map")
-        .def(py::init<>())
+        .def(py::init<Optimizer*>())
         .def_readwrite("landmarks",&Map::landmarks)
         .def_readwrite("keyFrames",&Map::keyFrames)
         .def("createLandmarks",&Map::createLandmarks)
@@ -19,5 +20,6 @@ void bind_map(py::module_ &m) {
         .def("getAgedFrame",&Map::getAgedFrame)
         .def("getClosestKeyFrames",&Map::getClosestKeyFrames)
         .def("getLocalMap",&Map::getLocalMap)
-        .def("getLengthKeyFrame",&Map::getLengthKeyFrame);
+        .def("getLengthKeyFrame",&Map::getLengthKeyFrame)
+        .def("mapping",&Map::mapping, py::call_guard<py::gil_scoped_release>());
 }

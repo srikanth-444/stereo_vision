@@ -11,15 +11,6 @@ Stereo::Stereo(Eigen::Matrix3f left_intrinsic,Eigen::Matrix4f left_extrinsic,Eig
                     this->R_rel = T_rel.block<3,3>(0,0);
                     this->t_rel = T_rel.block<3,1>(0,3);
                 
-
-                    // std::cout<<"left intrinsic: "<<l_K
-                    //             <<"distrotion: "<<l_dist<<std::endl;
-                    // std::cout<<"right intrinsic: "<<r_K
-                    //             <<"distrotion: "<<r_dist<<std::endl;
-                    // std::cout<<"relative R: "<<R_rel
-                    //             <<"relative t: "<<t_rel<<std::endl;
-                
-                
                 cv::eigen2cv(l_K, cv_l_K);
                 cv::eigen2cv(r_K, cv_r_K);
                 cv::eigen2cv(R_rel, cv_R_rel);
@@ -33,13 +24,6 @@ Stereo::Stereo(Eigen::Matrix3f left_intrinsic,Eigen::Matrix4f left_extrinsic,Eig
                 cv_l_dist.convertTo(cv_l_dist, CV_64F);
                 cv_r_dist.convertTo(cv_r_dist, CV_64F);
 
-                // std::cout<<"left intrinsic: "<<cv_l_K
-                //             <<"distrotion: "<<cv_l_dist<<std::endl;
-                // std::cout<<"right intrinsic: "<<cv_r_K
-                //             <<"distrotion: "<<cv_r_dist<<std::endl;
-                // std::cout<<"relative R: "<<cv_R_rel
-                //             <<"relative t: "<<cv_T_rel<<std::endl;
-
                 // 3. Stereo Rectification
                 cv::stereoRectify(cv_l_K, cv_l_dist, cv_r_K, cv_r_dist, cv::Size(W, H), cv_R_rel, cv_T_rel, R1, R2, P1, P2, Q, cv::CALIB_ZERO_DISPARITY, 0);
                 // std::cout<<"R1: "<<R1
@@ -52,6 +36,24 @@ Stereo::Stereo(Eigen::Matrix3f left_intrinsic,Eigen::Matrix4f left_extrinsic,Eig
                 cx = P1.at<double>(0,2);
                 cy = P1.at<double>(1,2);
                 baseline = -P2.at<double>(0,3) / P2.at<double>(0,0); 
+                fx2= P2.at<double>(0,0);
+                fy2= P2.at<double>(1,1);
+                cx2= P2.at<double>(0,2);
+                cy2= P2.at<double>(1,2);
+            
+                std::cout << "T_rel:\n" << T_rel << "\n";
+                std::cout << "baseline (x-translation): " << T_rel(0,3) << "\n";
+                std::cout << "Y translation (should be ~0): " << T_rel(1,3) << "\n";
+                std::cout << "Z translation (should be ~0): " << T_rel(2,3) << "\n";
+
+                // R should be near identity for a well-calibrated stereo rig
+                Eigen::Matrix3f R = T_rel.block<3,3>(0,0);
+                Eigen::AngleAxisf aa(R);
+                std::cout << "Rotation angle (should be ~0): " 
+                        << aa.angle() * 180.f / M_PI << " degrees\n";
+
+                std::cout<<"Projection matrix P1: "<<P1<<std::endl;
+                std::cout<<"Projection matrix P2: "<<P2<<std::endl;
                 }
 std::vector<cv::Point2f> eigenToCvPoints(const Eigen::MatrixXf& mat) {
     std::vector<cv::Point2f> pts;
@@ -78,9 +80,14 @@ void Stereo::getDepth(std::shared_ptr<Frame> &leftFrame,std::shared_ptr<Frame> &
     points_3d.reserve(left_ids.size());
     featureIds.reserve(left_ids.size());
 
-    auto rect_l=eigenToCvPoints(pts_l);
-    auto rect_r=eigenToCvPoints(pts_r);
-    // std::cout<<"points: "<<rect_l[0]<<rect_r[0]<<std::endl;
+    auto cv_pts_l=eigenToCvPoints(pts_l);
+    auto cv_pts_r=eigenToCvPoints(pts_r);
+
+    std::vector<cv::Point2f> rect_l;
+    std::vector<cv::Point2f> rect_r; 
+    cv::undistortPoints(cv_pts_l, rect_l, cv_l_K, cv_l_dist, R1, P1);
+    cv::undistortPoints(cv_pts_r, rect_r, cv_r_K, cv_r_dist, R2, P2);
+    // std::cout<<"points: "<<cv_pts_l[0]<<cv_pts_r[0]<<std::endl;
     std::map<int, std::vector<int>> row_to_right_indices;
     for (size_t i = 0; i < rect_r.size(); ++i) {
         int row = static_cast<int>(std::round(rect_r[i].y));
@@ -102,15 +109,7 @@ void Stereo::getDepth(std::shared_ptr<Frame> &leftFrame,std::shared_ptr<Frame> &
         }
 
         if (candidates.empty()) continue;
-        // std::cout<<"leftdescriptors: "<<des_l
-        //             <<"rightdescriptors: "<<des_r<<std::endl;
-        // std::cout << "candidates: ";
-        // for (int c : candidates) {
-        //     std::cout << c << " ";
-        // }
-        // std::cout << std::endl;
         int best_idx = leftFrame->featureExtractor->match(des_l.row((int)i), des_r, candidates, 0.7);
-        // std::cout<<best_idx<<std::endl;
         if (best_idx < 0) continue;
         if (used_right_indices.count(best_idx)) continue;
         if (rect_l[i].x <= rect_r[best_idx].x) continue;
@@ -121,24 +120,33 @@ void Stereo::getDepth(std::shared_ptr<Frame> &leftFrame,std::shared_ptr<Frame> &
         if(Z>15)continue;
         float X = (rect_l[i].x - cx) * Z / fx;
         float Y = (rect_l[i].y - cy) * Z / fy;
-
-        // std::cout<<"X: "<<X
-        //          <<"Y: "<<Y
-        //          <<"Z: "<<Z<<std::endl;
-        // project
-        float u_r_proj = fx * X / Z + cx;
-        float v_r_proj = fy * Y / Z + cy;
-        // std::cout<<u_r_proj<<","<<v_r_proj<<std::endl;
-        float reproj_error = std::sqrt(
-            std::pow(u_r_proj - rect_l[i].x, 2) +
-            std::pow(v_r_proj - rect_l[i].y, 2)
+        Eigen::Vector3f p_left(X,Y,Z);
+        Eigen::Vector3f p_right(
+            p_left(0) - baseline,
+            p_left(1),
+            p_left(2)
         );
-        // std::cout<<reproj_error<<std::endl;
-        if (reproj_error > 3.0f) continue;
+
+        if(p_right(2) <= 0) continue;
+        // std::cout<<"3D point in left camera frame: "<<p_left.transpose()<<std::endl;
+        // std::cout<<"3D point in right camera frame: "<<p_right.transpose()<<std::endl;
+        float u_r_proj = fx2 * p_right(0) / p_right(2) + cx2;
+        float v_r_proj = fy2 * p_right(1) / p_right(2) + cy2;
+
+        // 4. Compare against actual right keypoint
+        float reproj_error = std::sqrt(
+            std::pow(u_r_proj - rect_r[best_idx].x, 2) +
+            std::pow(v_r_proj - rect_r[best_idx].y, 2)
+        );
+        // std::cout<<"Reprojection error: "<<reproj_error<<std::endl;
+        if(reproj_error > 3.0f) continue;
         
         auto p_cam=Eigen::Vector3f(X,Y,Z);
-        Eigen::Vector3f p_world = l_extrinsic.block<3,3>(0,0) * p_cam 
-                          + l_extrinsic.block<3,1>(0,3);
+        Eigen::Matrix3f R1_eig;
+        cv::cv2eigen(R1, R1_eig);
+        Eigen::Vector3f p_cam_original = R1_eig.transpose() * p_cam;
+        Eigen::Vector3f p_world = l_extrinsic.block<3,3>(0,0) * p_cam_original
+                                + l_extrinsic.block<3,1>(0,3);
         points_3d.emplace_back(p_world);
         featureIds.emplace_back(left_ids[i]);
         final_matches.push_back(std::make_pair(i, best_idx));
@@ -146,6 +154,8 @@ void Stereo::getDepth(std::shared_ptr<Frame> &leftFrame,std::shared_ptr<Frame> &
     //visualizeMatchesBlackCanvas(rect_l,rect_r,final_matches,leftFrame->image.cols,leftFrame->image.rows);
 
 }
+
+
 void Stereo::visualizeMatchesBlackCanvas(
     const std::vector<cv::Point2f>& rect_l,
     const std::vector<cv::Point2f>& rect_r,
@@ -200,7 +210,14 @@ void Stereo::rectifyPoints(std::shared_ptr<Frame> &leftFrame,
 
         leftFrame->intrinsic = K1_eigen;
         rightFrame->intrinsic = K2_eigen;
+        leftFrame->setStereoFrame(rightFrame);
+        leftFrame->baseline=this->baseline;
+        Eigen::Matrix3f R1_eig, R2_eig;
+        cv::cv2eigen(R1, R1_eig);
+        cv::cv2eigen(R2, R2_eig);
 
+        // leftFrame->extrinsic.block<3,3>(0,0)  *= R1_eig.transpose();
+        // rightFrame->extrinsic.block<3,3>(0,0) *= R2_eig.transpose();
         for (size_t i = 0; i < leftFrame->keyPoints.size(); i++) {
             leftFrame->keyPoints[i].pt = rect_l[i];
         }

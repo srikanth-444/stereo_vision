@@ -46,7 +46,7 @@ void bind_frame(py::module_ &m) {
 
     py::class_<Frame,std::shared_ptr<Frame>>(m, "Frame")
         .def(py::init([](
-        int id, py::array_t<uint8_t> img, int64_t timeStamp,Eigen::Matrix3f K, Eigen::Matrix4f Tcw,Eigen::Vector4f dist_coefficents,FeatureExtractor* extractor
+        int id, py::array_t<uint8_t> img, int64_t timeStamp,Eigen::Matrix3f K, Eigen::Matrix4f Tcw,Eigen::Vector4f dist_coefficents,std::shared_ptr<FeatureExtractor> extractor
         ) 
     {   
         py::buffer_info buf = img.request();
@@ -66,7 +66,6 @@ void bind_frame(py::module_ &m) {
             return py::make_tuple(v,f.t);})
         .def_readwrite("mergers", &Frame::mergers)
         .def_readwrite("nVisible",&Frame::nVisible)
-        .def_readwrite("projectedPoints",&Frame::projectedPoints)
         .def("getNotAssociatedIndices",&Frame::getNotAssociatedIndices)
         .def("getNotAssociatedPoints", &Frame::getNotAssociatedPoints)
         .def("getNotAssociatedDescriptors",[](Frame &f){return mat_to_numpy(f.getNotAssociatedDescriptors());})
@@ -74,12 +73,13 @@ void bind_frame(py::module_ &m) {
         .def("getTrackedPoints",&Frame::getTrackedPoints)
         .def("getCameraCenter",&Frame::getCameraCenter)
         .def("addKeyPointsToGrid",&Frame::addKeyPointsToGrid)
-        .def("updateCovisibility",&Frame::updateCovisibility)
-        .def("extractFeatures",&Frame::extractFeatures)
+        .def("updateCovisibility",&Frame::updateCovisibility,py::call_guard<py::gil_scoped_release>())
+        .def("extractFeatures",&Frame::extractFeatures, py::call_guard<py::gil_scoped_release>())
         .def("setCameraWorldPose",[](Frame &f, Eigen::Vector4f r, Eigen::Vector3f t){
             Eigen::Quaternionf q(r);
             return f.setCameraWorldPose(q,t);
         })
+        .def("setStereoFrame",&Frame::setStereoFrame)
         .def("getVisibleLandmarks",&Frame::getVisibleLandmarks)
         .def("match",[](Frame &f, std::vector<std::shared_ptr<Landmark>> landmarks){
                 std::vector<cv::Point3f> objectPoints;

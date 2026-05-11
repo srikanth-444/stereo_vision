@@ -40,4 +40,8 @@ public:
     float cx ;
     float cy ;
     float baseline ;
+    float fx2 ;
+    float fy2 ;
+    float cx2 ;
+    float cy2 ;
 };
